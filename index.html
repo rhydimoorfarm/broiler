@@ -1,0 +1,1608 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1f6f43">
+<title>Broiler Chart — Daily Records</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --green:#1f6f43; --green-d:#155232; --green-l:#e7f3ec;
+    --ink:#1c2620; --muted:#65726a; --line:#d7ded8; --bg:#f4f7f4;
+    --water:#2a7de1; --warn:#c4341f; --warn-bg:#fdecea; --ok:#1f6f43;
+    --amber:#b8860b; --card:#ffffff; --med:#7b48c9;
+    --r:14px; --tap:54px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--ink);font-size:16px;line-height:1.4;
+    padding-bottom:84px;-webkit-text-size-adjust:100%}
+  .wrap{max-width:760px;margin:0 auto}
+
+  header{background:linear-gradient(135deg,var(--green),var(--green-d));color:#fff;
+    padding:14px 16px;position:sticky;top:0;z-index:40;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+  .htop{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .htop h1{font-size:17px;margin:0;font-weight:700;letter-spacing:.2px}
+  .brand-sub{font-size:11px;opacity:.85;font-weight:500;margin-top:1px}
+  select.house-pick{background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.35);
+    border-radius:10px;padding:8px 10px;font-size:14px;font-weight:600;max-width:150px}
+  select.house-pick option{color:#000}
+  .flockbar{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .chip{background:rgba(255,255,255,.14);border-radius:10px;padding:6px 10px;font-size:12px;flex:1;min-width:66px;text-align:center}
+  .chip b{display:block;font-size:16px;font-weight:700;line-height:1.1}
+  .chip span{opacity:.85;font-size:10px;text-transform:uppercase;letter-spacing:.4px}
+
+  nav.tabs{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);
+    display:flex;z-index:50;box-shadow:0 -2px 10px rgba(0,0,0,.06)}
+  nav.tabs button{flex:1;border:0;background:none;padding:9px 1px 8px;font-size:10px;color:var(--muted);
+    display:flex;flex-direction:column;align-items:center;gap:3px;font-weight:600;cursor:pointer;min-height:var(--tap)}
+  nav.tabs button .ic{font-size:20px;line-height:1}
+  nav.tabs button.active{color:var(--green)}
+
+  main{padding:14px}
+  .view{display:none}
+  .view.active{display:block;animation:fade .2s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1}}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:14px}
+  .card h2{font-size:14px;margin:0 0 10px;color:var(--green-d);text-transform:uppercase;letter-spacing:.5px;
+    display:flex;align-items:center;gap:7px}
+  .card h2 .em{font-size:17px}
+  .section-note{font-size:12px;color:var(--muted);margin:-4px 0 12px}
+
+  label{display:block;font-size:12.5px;font-weight:600;color:var(--muted);margin:0 0 5px}
+  input,textarea,select.fldsel{width:100%;padding:13px 12px;font-size:16px;border:1.5px solid var(--line);border-radius:11px;
+    background:#fdfefd;font-family:inherit;color:var(--ink)}
+  input:focus,textarea:focus,select.fldsel:focus{outline:none;border-color:var(--green);background:#fff}
+  input[type=date],input[type=time]{min-height:var(--tap)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px}
+  .fld{margin-bottom:12px}
+  .fld:last-child{margin-bottom:0}
+  .unit{position:relative}
+  .unit .u{position:absolute;right:11px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--muted);pointer-events:none;font-weight:600}
+
+  .calc{background:var(--green-l);border-radius:11px;padding:11px 12px;margin:11px 0 0;font-size:13px;color:var(--green-d)}
+  .calc .row{display:flex;justify-content:space-between;padding:3px 0}
+  .calc .row b{font-weight:700}
+  .calc .row.big b{font-size:18px}
+
+  .alert{border-radius:11px;padding:11px 12px;font-size:13px;margin:10px 0 0;display:none;font-weight:600}
+  .alert.show{display:block}
+  .alert.warn{background:var(--warn-bg);color:var(--warn);border:1px solid #f3c0b8}
+  .alert.amber{background:#fdf6e3;color:var(--amber);border:1px solid #efdca0}
+  .alert.info{background:#eaf2fb;color:#1a5ca8;border:1px solid #c2dbf2}
+
+  .walkrow{display:flex;align-items:center;gap:8px;background:#f8faf8;border:1px solid var(--line);
+    border-radius:11px;padding:9px 11px;margin-bottom:8px;font-size:13px}
+  .walkrow .wt{font-weight:700;color:var(--green-d);min-width:46px}
+  .walkrow .wd{flex:1;line-height:1.3}
+  .walkrow .wd small{color:var(--muted)}
+  .walkrow .wx{color:var(--warn);font-size:18px;cursor:pointer;padding:2px 6px;flex:none}
+  .walkadd{border:1.5px dashed var(--line);border-radius:12px;padding:12px;margin-top:6px;background:#fdfefd}
+  .walkstat{font-size:12.5px;font-weight:600;border-radius:10px;padding:8px 10px;margin-bottom:8px}
+  .walkstat.ok{background:#e7f3ec;color:#1f6f43}
+  .walkstat.low{background:#fdecea;color:#c4341f}
+  .walknone{font-size:12.5px;color:var(--muted);padding:4px 2px 10px}
+
+  .checks{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .chk{display:flex;align-items:center;gap:9px;background:#fdfefd;border:1.5px solid var(--line);
+    border-radius:11px;padding:11px;font-size:13.5px;font-weight:600;cursor:pointer;min-height:var(--tap)}
+  .chk input{width:22px;height:22px;flex:none;accent-color:var(--green)}
+  .chk.on{background:var(--green-l);border-color:var(--green)}
+
+  .litter{display:flex;gap:7px}
+  .litter button{flex:1;border:1.5px solid var(--line);background:#fff;border-radius:11px;padding:10px 4px;
+    font-size:12px;font-weight:600;cursor:pointer;min-height:var(--tap);color:var(--ink)}
+  .litter button b{display:block;font-size:17px}
+  .litter button.on{background:var(--green);color:#fff;border-color:var(--green)}
+
+  .btn{display:block;width:100%;border:0;border-radius:12px;padding:15px;font-size:16px;font-weight:700;
+    cursor:pointer;text-align:center;min-height:var(--tap)}
+  .btn.primary{background:var(--green);color:#fff}
+  .btn.primary:active{background:var(--green-d)}
+  .btn.ghost{background:#fff;color:var(--green);border:1.5px solid var(--green)}
+  .btn.med{background:#fff;color:var(--med);border:1.5px solid var(--med)}
+  .btn.sec{background:#eef2ee;color:var(--ink)}
+  .btn.danger{background:#fff;color:var(--warn);border:1.5px solid #e9b6ad}
+  .btn+.btn{margin-top:10px}
+  .btnrow{display:flex;gap:10px}
+  .btnrow .btn{margin-top:0}
+  .btn.small{padding:11px;font-size:14px;min-height:46px}
+
+  .tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:12px;background:#fff}
+  table{border-collapse:collapse;width:100%;font-size:12px;white-space:nowrap}
+  th,td{padding:8px 9px;border-bottom:1px solid var(--line);text-align:right}
+  th{background:var(--green);color:#fff;position:sticky;top:0;font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;font-weight:700}
+  th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--green);z-index:2}
+  td:first-child{background:#f0f5f1;font-weight:700}
+  tbody tr:nth-child(even) td{background:#f8faf8}
+  tbody tr:nth-child(even) td:first-child{background:#eaf1eb}
+  td.flag{color:var(--warn);font-weight:700}
+  .rec-edit{color:var(--water);text-decoration:underline;cursor:pointer}
+
+  .chart-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px}
+  .chart-card h3{margin:0 0 2px;font-size:14px;color:var(--green-d)}
+  .chart-card .sub{font-size:11.5px;color:var(--muted);margin:0 0 8px}
+  svg.chart{width:100%;height:auto;display:block;overflow:visible}
+  .legend{display:flex;gap:14px;font-size:11.5px;color:var(--muted);margin-top:8px;flex-wrap:wrap}
+  .legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+
+  .medrow{background:#faf7fe;border:1px solid #e2d6f3;border-radius:12px;padding:11px 12px;margin-bottom:9px;cursor:pointer}
+  .medrow .mt{font-weight:700;color:var(--med);font-size:13.5px;display:flex;justify-content:space-between}
+  .medrow .ms{font-size:12px;color:var(--muted);margin-top:3px;line-height:1.35}
+  .medrow .wdtag{display:inline-block;background:#ede3fb;color:var(--med);border-radius:16px;padding:2px 9px;font-size:11px;font-weight:700;margin-top:5px}
+
+  .empty{text-align:center;color:var(--muted);padding:34px 16px;font-size:14px}
+  .empty .big{font-size:42px;margin-bottom:8px}
+  .help{font-size:12px;color:var(--muted);background:#fff;border:1px dashed var(--line);border-radius:12px;padding:12px;margin-bottom:14px}
+  .help b{color:var(--ink)}
+  .muted-sm{font-size:11.5px;color:var(--muted)}
+  hr.soft{border:0;border-top:1px solid var(--line);margin:14px 0}
+  .pill{display:inline-block;background:var(--green-l);color:var(--green-d);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;margin-left:6px}
+
+  .toast{position:fixed;bottom:96px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--green-d);
+    color:#fff;padding:12px 20px;border-radius:30px;font-size:14px;font-weight:600;opacity:0;pointer-events:none;
+    transition:.25s;z-index:80;box-shadow:0 4px 16px rgba(0,0,0,.25);max-width:90%}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  #printArea{display:none}
+  @media print{
+    body *{visibility:hidden}
+    #printArea,#printArea *{visibility:visible}
+    #printArea{display:block;position:absolute;left:0;top:0;width:100%}
+    @page{size:A4 landscape;margin:8mm}
+    .ph{display:flex;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:8px}
+    .ph h2{margin:0;font-size:16px}
+    .ph .id{font-size:10px;text-align:right;line-height:1.5}
+    #printArea table{font-size:8px;width:100%;margin-bottom:10px}
+    #printArea th{background:#ddd!important;color:#000!important;border:1px solid #999;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    #printArea td{border:1px solid #bbb;color:#000}
+    #printArea td:first-child,#printArea th:first-child{position:static;background:#eee!important}
+    #printArea h3{font-size:12px;margin:10px 0 4px}
+    .pfoot{margin-top:8px;font-size:9px;display:flex;justify-content:space-between}
+  }
+
+  /* ---- On-screen Avara chart (Sheet tab + zoom view) ---- */
+  .sheettools{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:0 2px 8px;flex-wrap:wrap}
+  .sheettools .zoomgrp{display:flex;align-items:center;gap:6px}
+  .btn.tiny{padding:7px 11px;font-size:13px;min-height:auto;border-radius:10px;line-height:1}
+  #sheetZoomLbl{min-width:42px;text-align:center;font-weight:700}
+  .sheetscroll{overflow:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);
+    border-radius:12px;max-height:74vh;background:#fff}
+  .avachart{background:#fff;color:#000;padding:12px;width:max-content;min-width:100%;
+    font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.25}
+  .avachart table{border-collapse:collapse;margin-bottom:10px}
+  .avachart th,.avachart td{border:1px solid #b9b9b9;padding:3px 5px;text-align:center;white-space:nowrap}
+  .avachart th{background:#dcdcdc;color:#000;font-weight:700}
+  .avachart h3{font-size:13px;margin:12px 0 4px;color:#000}
+  .avachart .pfoot{display:flex;justify-content:space-between;gap:12px;margin-top:8px;
+    font-size:9px;color:#444;white-space:normal}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="htop">
+      <div>
+        <h1 id="bizName">🐔 Rhydimoor Farms Ltd</h1>
+        <div class="brand-sub" id="brandSub">Broiler daily records</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+        <button id="lockBtn" onclick="toggleLock()" style="display:none;background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:8px 10px;font-size:13px;font-weight:700;cursor:pointer"></button>
+        <button id="hdrSync" style="display:none;background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:8px 10px;font-size:13px;font-weight:700;cursor:pointer">↻ Sync</button>
+        <select class="house-pick" id="housePick" onchange="selectHouse(this.value)"></select>
+        <button id="hdrSignOut" style="display:none;background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:8px 10px;font-size:13px;font-weight:700;cursor:pointer">Sign out</button>
+      </div>
+    </div>
+    <div class="flockbar" id="flockbar"></div>
+  </header>
+
+  <main>
+    <!-- ============ TODAY ============ -->
+    <section class="view active" id="v-today">
+      <div id="noHouse" class="card" style="display:none">
+        <div class="empty"><div class="big">🏠</div>
+          <p>No house set up yet.<br>Add your first house to start recording.</p>
+          <button class="btn primary" onclick="go('houses')">Set up a house</button></div>
+      </div>
+
+      <div id="entryWrap">
+        <div class="card">
+          <h2><span class="em">📅</span> Day</h2>
+          <div class="grid2">
+            <div class="fld"><label>Date</label><input type="date" id="f_date" onchange="onDateChange()"></div>
+            <div class="fld"><label>Crop day (age)</label><input type="text" id="f_age" readonly style="background:#eef2ee;font-weight:700"></div>
+          </div>
+        </div>
+
+        <!-- MORTALITY — inspection walks -->
+        <div class="card">
+          <h2><span class="em">📉</span> Mortality — walks</h2>
+          <p class="section-note">Log each inspection walk as you do it. Two people can each add their own walk — every walk adds to the day's total and the flock's cumulative. Nothing gets overwritten.</p>
+          <div id="walkList"></div>
+          <div class="walkadd">
+            <div class="grid2">
+              <div class="fld"><label>Time</label><input type="time" id="w_time"></div>
+              <div class="fld"><label>Operator</label>
+                <select class="fldsel" id="w_opSel" onchange="opSync()">
+                  <option value="">Select…</option>
+                  <option>Andrew</option><option>Lawson</option><option>Jack</option><option value="Other">Other…</option>
+                </select></div>
+            </div>
+            <input type="text" id="w_opOther" placeholder="Operator name" style="display:none;margin-bottom:12px">
+            <label>Found on this walk — dead</label>
+            <div class="unit" style="margin-bottom:10px"><input type="number" inputmode="numeric" id="w_dead" min="0" placeholder="0"><span class="u">dead</span></div>
+            <label>Culls — by reason</label>
+            <div class="grid2" style="margin-bottom:9px">
+              <div class="unit"><input type="number" inputmode="numeric" id="w_leg" min="0" placeholder="0"><span class="u">leg</span></div>
+              <div class="unit"><input type="number" inputmode="numeric" id="w_small" min="0" placeholder="0"><span class="u">small</span></div>
+            </div>
+            <div class="grid2">
+              <div class="unit"><input type="number" inputmode="numeric" id="w_disease" min="0" placeholder="0"><span class="u">disease</span></div>
+              <div class="unit"><input type="number" inputmode="numeric" id="w_other" min="0" placeholder="0"><span class="u">other</span></div>
+            </div>
+            <label style="display:block;margin-top:9px">Top-up bales put out on this walk</label>
+            <div class="unit"><input type="number" inputmode="numeric" id="w_bales" min="0" placeholder="0"><span class="u">bales</span></div>
+            <input type="text" id="w_note" placeholder="Note (optional) — e.g. signs of lameness" style="margin-top:10px">
+            <button class="btn ghost small" style="margin-top:10px" onclick="addWalk()">➕ Add this walk</button>
+          </div>
+          <div class="calc" id="mortCalc"></div>
+          <div class="alert warn" id="mortAlert"></div>
+        </div>
+
+        <!-- THIN / CLEARANCE -->
+        <div class="card">
+          <h2><span class="em">🚛</span> Thin / clearance</h2>
+          <p class="section-note">Birds taken for processing — the thin (~day 31) and final clearance. Not mortality or culls, but the app needs it so birds-remaining and water-per-1,000 stay right.</p>
+          <div class="grid2">
+            <div class="fld"><label>Birds taken today</label><input type="number" inputmode="numeric" id="f_thin" min="0" placeholder="0" oninput="recalc()"></div>
+            <div class="fld"><label>Type</label>
+              <select class="fldsel" id="f_thintype"><option value="">—</option><option>Thin</option><option>Final clearance</option></select></div>
+          </div>
+        </div>
+
+        <!-- WATER -->
+        <div class="card">
+          <h2><span class="em">💧</span> Water</h2>
+          <p class="section-note">Meter houses: enter the reading and the time — the app normalises to a true rolling 24 h, so reading early or late doesn't skew the trend. Electronic houses: just enter the litres used today from the printout. Which one is set in the house's setup.</p>
+          <div class="grid2" id="waterMeterWrap">
+            <div class="fld"><label>Water meter reading</label><input type="number" inputmode="decimal" id="f_meter" min="0" placeholder="e.g. 24680" oninput="recalc()"></div>
+            <div class="fld"><label>Time of read</label><input type="time" id="f_mtime" onchange="recalc()" oninput="recalc()"></div>
+          </div>
+          <div class="fld" id="waterDailyWrap" style="display:none"><label>Water used today (from the printout)</label><div class="unit"><input type="number" inputmode="decimal" id="f_waterdaily" min="0" placeholder="e.g. 1850" oninput="recalc()"><span class="u">L</span></div></div>
+          <div class="grid2">
+            <div class="fld"><label>Compound feed today</label><div class="unit"><input type="number" inputmode="decimal" id="f_feed" min="0" placeholder="0" oninput="recalc()"><span class="u">kg</span></div></div>
+            <div class="fld"><label>Whole wheat today</label><div class="unit"><input type="number" inputmode="decimal" id="f_wheat" min="0" placeholder="0" oninput="recalc()"><span class="u">kg</span></div></div>
+          </div>
+          <div class="fld"><label>Feed type / phase</label>
+            <select class="fldsel" id="f_feedtype">
+              <option value="">—</option>
+              <option>Starter crumb</option><option>Rearer</option><option>Grower</option><option>Finisher</option><option>Withdrawal</option>
+            </select></div>
+          <div class="calc" id="waterCalc"></div>
+          <div class="alert warn" id="waterAlert"></div>
+        </div>
+
+        <!-- WEIGHT -->
+        <div class="card">
+          <h2><span class="em">⚖️</span> Weight</h2>
+          <div class="fld"><label>Average bird weight</label><div class="unit"><input type="number" inputmode="decimal" id="f_weight" min="0" placeholder="0" oninput="recalc()"><span class="u">g</span></div></div>
+          <div class="calc" id="weightCalc"></div>
+        </div>
+
+        <!-- ENVIRONMENT -->
+        <div class="card">
+          <h2><span class="em">🌡️</span> House environment</h2>
+          <label>Temperature (°C)</label>
+          <div class="grid2" style="margin-bottom:12px">
+            <div class="unit"><input type="number" inputmode="decimal" id="f_tmax" placeholder="Max"><span class="u">max</span></div>
+            <div class="unit"><input type="number" inputmode="decimal" id="f_tmin" placeholder="Min"><span class="u">min</span></div>
+          </div>
+          <label>Humidity (%)</label>
+          <div class="grid2" style="margin-bottom:12px">
+            <div class="unit"><input type="number" inputmode="numeric" id="f_hmax" placeholder="Max"><span class="u">max</span></div>
+            <div class="unit"><input type="number" inputmode="numeric" id="f_hmin" placeholder="Min"><span class="u">min</span></div>
+          </div>
+          <div class="grid2">
+            <div class="fld"><label>CO₂ (ppm)</label><input type="number" inputmode="numeric" id="f_co2" placeholder="0"></div>
+            <div class="fld"><label>Ammonia (ppm)</label><input type="number" inputmode="numeric" id="f_nh3" placeholder="0"></div>
+          </div>
+          <div class="grid2" style="margin-top:2px">
+            <div class="fld"><label>Dark hrs</label><input type="number" inputmode="decimal" id="f_dark" placeholder="0"></div>
+            <div class="fld"><label>Windows open</label>
+              <select class="fldsel" id="f_windows"><option value="">—</option><option>Yes</option><option>No</option></select></div>
+          </div>
+          <label style="margin-top:4px">Litter score (1–4)</label>
+          <div class="litter" id="litterPick">
+            <button type="button" data-v="1" onclick="setLitter(1)"><b>1</b>Dry/friable</button>
+            <button type="button" data-v="2" onclick="setLitter(2)"><b>2</b>Sl. moist</button>
+            <button type="button" data-v="3" onclick="setLitter(3)"><b>3</b>Capped</button>
+            <button type="button" data-v="4" onclick="setLitter(4)"><b>4</b>Wet</button>
+          </div>
+          <p class="muted-sm" id="litterPrompt" style="margin:7px 0 0">Avara: score litter on days 7, 14, 21, 28, 35. 1 = dry &amp; friable · 2 = slightly moist / capped under drinkers · 3 = capped but not dry · 4 = wet.</p>
+          <div class="fld" style="margin-top:10px"><label>Litter comment</label><input type="text" id="f_littercmt" placeholder="e.g. capped under line 3, top-dressed"></div>
+        </div>
+
+        <!-- CHECKS -->
+        <div class="card">
+          <h2><span class="em">✅</span> Checks &amp; alarms</h2>
+          <p class="section-note">Tick what was done today. Generator test, fire extinguisher and foot dip are normally weekly — tick on the day you do them.</p>
+          <div class="checks">
+            <label class="chk"><input type="checkbox" id="f_alarm">Daily alarm check</label>
+            <label class="chk"><input type="checkbox" id="f_dialout">Alarm dial-out (weekly)</label>
+            <label class="chk"><input type="checkbox" id="f_generator">Generator test (weekly)</label>
+            <label class="chk"><input type="checkbox" id="f_fireext">Fire extinguisher (weekly)</label>
+            <label class="chk"><input type="checkbox" id="f_footdip">Foot dip changed (weekly)</label>
+          </div>
+          <div class="fld" style="margin-top:12px"><label>Notes / actions taken (incl. vaccination)</label>
+            <textarea id="f_notes" rows="2" placeholder="Vet visit, equipment, observations…"></textarea></div>
+        </div>
+
+        <button class="btn primary" onclick="saveEntry()">💾 Save day's readings</button>
+        <p class="muted-sm" style="text-align:center;margin-top:10px">Walks save instantly when you add them. This button saves water, weight, environment &amp; checks.</p>
+      </div>
+    </section>
+
+    <!-- ============ MEDS ============ -->
+    <section class="view" id="v-meds">
+      <div class="card">
+        <h2><span class="em">💉</span> Medicines &amp; vaccines</h2>
+        <p class="section-note">A full treatment log for this house — needed for Red Tractor, the medicine book, and the Food Chain Information form. The app works out the earliest slaughter date from the withdrawal period.</p>
+        <div id="medList"></div>
+        <button class="btn med" onclick="newMed()" style="margin-top:6px">➕ Add treatment / vaccine</button>
+        <button class="btn sec" onclick="exportMedsCSV()" style="margin-top:10px">⬇️ Download medicines log (CSV)</button>
+      </div>
+
+      <div class="card" id="medFormCard" style="display:none">
+        <h2><span class="em">✏️</span> <span id="medFormTitle">New entry</span></h2>
+        <div class="fld"><label>Type</label>
+          <select class="fldsel" id="m_type" onchange="medFormSync()">
+            <option value="Vaccine">Vaccine</option>
+            <option value="Antibiotic">Antibiotic (POM-V)</option>
+            <option value="Medicine">Other medicine</option>
+            <option value="Supplement">Supplement / vitamin</option>
+          </select></div>
+        <div class="fld"><label>Product name (exactly as on label)</label><input type="text" id="m_product" placeholder="e.g. Nobilis IB / Amoxinsol"></div>
+        <div class="grid2">
+          <div class="fld"><label>Batch number</label><input type="text" id="m_batch" placeholder="batch"></div>
+          <div class="fld"><label>Expiry date</label><input type="date" id="m_expiry"></div>
+        </div>
+        <div class="grid2">
+          <div class="fld"><label>Date started</label><input type="date" id="m_start" onchange="medCalc()"></div>
+          <div class="fld"><label>Date ended</label><input type="date" id="m_end" onchange="medCalc()"></div>
+        </div>
+        <div class="grid2">
+          <div class="fld"><label>Dose</label><input type="text" id="m_dose" placeholder="e.g. 20mg/kg"></div>
+          <div class="fld"><label>Route</label>
+            <select class="fldsel" id="m_route">
+              <option>In water</option><option>In feed</option><option>Injection</option>
+              <option>Spray / aerosol</option><option>Eye drop</option><option>Topical</option><option>Day-old (hatchery)</option>
+            </select></div>
+        </div>
+        <div class="grid2">
+          <div class="fld" id="wdWrap"><label>Withdrawal period (meat)</label><div class="unit"><input type="number" inputmode="numeric" id="m_wd" placeholder="0" oninput="medCalc()"><span class="u">days</span></div></div>
+          <div class="fld"><label>Birds / houses treated</label><input type="text" id="m_birds" placeholder="e.g. all, House 1"></div>
+        </div>
+        <div class="fld"><label>Administered by</label><input type="text" id="m_admin" placeholder="Name"></div>
+        <div class="grid2" id="vetWrap">
+          <div class="fld"><label>Prescribing vet</label><input type="text" id="m_vet" placeholder="Vet / practice"></div>
+          <div class="fld"><label>Prescription ref</label><input type="text" id="m_rx" placeholder="Rx number"></div>
+        </div>
+        <div class="fld"><label>Reason / notes</label><textarea id="m_reason" rows="2" placeholder="Indication, withdrawal observed, etc."></textarea></div>
+        <div class="calc" id="medCalcBox"></div>
+        <div class="btnrow" style="margin-top:12px"><button class="btn primary" onclick="saveMed()">Save</button><button class="btn sec" onclick="cancelMed()">Cancel</button></div>
+        <button class="btn danger" id="medDelBtn" style="display:none;margin-top:10px" onclick="deleteMed()">Delete this entry</button>
+      </div>
+    </section>
+
+    <!-- ============ CHARTS ============ -->
+    <section class="view" id="v-charts">
+      <div id="chartsEmpty" class="empty" style="display:none"><div class="big">📈</div><p>No data yet — record a few days and your charts appear here.</p></div>
+      <div id="chartsWrap"></div>
+    </section>
+
+    <!-- ============ RECORDS ============ -->
+    <section class="view" id="v-records">
+      <div class="card" style="padding:12px 14px">
+        <h2 style="margin-bottom:4px"><span class="em">📋</span> Flock record</h2>
+        <p class="section-note" id="recCount">Tap a day to open it.</p>
+        <div class="tbl-scroll" id="recTable"></div>
+      </div>
+      <div class="card" style="padding:12px 14px">
+        <h2 style="margin-bottom:4px"><span class="em">📝</span> Notes &amp; comments</h2>
+        <p class="section-note">Everything typed in notes — breakdowns, repairs, vet visits, actions — in date order. Doubles as the end-of-crop maintenance survey, and prints on the A4 chart.</p>
+        <div id="notesLog"></div>
+      </div>
+      <div class="card" style="padding:12px 14px">
+        <h2 style="margin-bottom:4px"><span class="em">👤</span> By operator</h2>
+        <p class="section-note">Who actually picked up the dead birds and culls, over a chosen period — across one house or the whole group.</p>
+        <div style="display:flex;gap:8px">
+          <div class="fld" style="flex:1"><label>From</label><input type="date" id="opFrom" onchange="renderOperatorReport()"></div>
+          <div class="fld" style="flex:1"><label>To</label><input type="date" id="opTo" onchange="renderOperatorReport()"></div>
+        </div>
+        <div class="fld"><label>Houses</label><select class="fldsel" id="opHouse" onchange="renderOperatorReport()"><option value="">All houses</option></select></div>
+        <div class="fld"><label>Operator</label><select class="fldsel" id="opFilter" onchange="renderOperatorReport()"><option value="">All operators</option></select></div>
+        <div style="display:flex;gap:8px;margin:6px 0 4px">
+          <button class="btn sec small" onclick="setOpRange(7)">Last 7 days</button>
+          <button class="btn sec small" onclick="setOpRange(0)">Whole crop</button>
+        </div>
+        <div id="opReport"></div>
+        <button class="btn ghost small" style="margin-top:10px" onclick="exportOperatorCSV()">⬇️ Download per-operator log (CSV)</button>
+      </div>
+    </section>
+
+    <!-- ============ AVARA SHEET (on-screen chart) ============ -->
+    <section class="view" id="v-sheet">
+      <div id="sheetEmpty" class="empty" style="display:none"><div class="big">📄</div><p>No data yet — record a few days and the chart appears here.</p></div>
+      <div id="sheetArea"></div>
+    </section>
+
+    <!-- ============ EXPORT ============ -->
+    <section class="view" id="v-export">
+      <div class="card">
+        <h2><span class="em">📤</span> Export &amp; print</h2>
+        <p class="section-note">Back up your data or produce an audit-ready chart.</p>
+        <button class="btn primary" onclick="exportCSV()">⬇️ Daily chart (CSV / Excel)</button>
+        <button class="btn ghost" onclick="exportWalksCSV()" style="margin-top:10px">⬇️ Inspection walks log (CSV)</button>
+        <button class="btn med" onclick="exportMedsCSV()" style="margin-top:10px">⬇️ Medicines log (CSV)</button>
+        <button class="btn ghost" onclick="go('sheet')" style="margin-top:10px">👁️ View / enlarge / print broiler chart</button>
+        <hr class="soft">
+        <button class="btn sec" onclick="backupJSON()">💾 Back up everything (.json)</button>
+        <button class="btn sec" onclick="document.getElementById('restoreFile').click()" style="margin-top:10px">📂 Restore / merge from backup</button>
+        <input type="file" id="restoreFile" accept=".json" style="display:none" onchange="restoreJSON(event)">
+      </div>
+      <div class="alert info show" style="margin:0 0 14px">📱 <b>Two phones?</b> This version stores data on each device. If two operators each use their own phone, use <b>Restore / merge</b> at the end of the day to combine their walks into one record. For live shared recording across phones, ask for the cloud-sync version.</div>
+      <div class="help"><b>Tip:</b> CSV opens straight into Excel or Google Sheets. The printed chart mirrors your paper sheet. The JSON backup holds every house, walk and medicine record.</div>
+    </section>
+
+    <!-- ============ HOUSES ============ -->
+    <section class="view" id="v-houses">
+      <div class="card">
+        <h2><span class="em">🏷️</span> Farm details</h2>
+        <div class="fld"><label>Farm / trading name</label><input type="text" id="s_farm" placeholder="Rhydimoor Farms Ltd"></div>
+        <div class="grid2">
+          <div class="fld"><label>Keeper name</label><input type="text" id="s_keeper" placeholder="Owner / keeper"></div>
+          <div class="fld"><label>Integrator</label><input type="text" id="s_integrator" placeholder="Avara"></div>
+        </div>
+        <div class="fld"><label>Operator initials <span class="muted-sm">(name=initials, comma separated)</span></label><input type="text" id="s_opinit" placeholder="Andrew=AT, Lawson=LT, Jack=JS"></div>
+        <button class="btn sec" onclick="saveFarm()">Save farm details</button>
+      </div>
+      <div class="card">
+        <h2><span class="em">🔒</span> Access &amp; roles</h2>
+        <p class="section-note" id="accessState"></p>
+        <div id="accessAdmin" style="display:none">
+          <p class="muted-sm" style="margin:0 0 10px">Set an admin PIN so others (e.g. Jack) can record walks and daily readings but can't edit or delete existing records. Without a PIN, everyone has full access.</p>
+          <div class="fld"><label>Admin PIN (4+ digits)</label><input type="password" inputmode="numeric" id="a_pin" placeholder="set or change PIN"></div>
+          <div class="btnrow"><button class="btn primary" onclick="setPin()">Save PIN</button><button class="btn danger" onclick="clearPin()">Remove PIN</button></div>
+          <button class="btn sec" onclick="lockNow()" style="margin-top:10px">🔒 Lock now (switch to operator mode)</button>
+        </div>
+        <div id="accessOperator" style="display:none">
+          <p class="muted-sm" style="margin:0 0 10px">You're in <b>operator mode</b> — you can add walks and save daily readings, but editing and deleting existing records is locked. Enter the admin PIN to unlock.</p>
+          <div class="fld"><label>Admin PIN</label><input type="password" inputmode="numeric" id="a_unlock" placeholder="enter PIN"></div>
+          <button class="btn primary" onclick="unlock()">Unlock admin mode</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2><span class="em">🏠</span> Houses</h2>
+        <p class="section-note">Each house has its own chart and water meter. Add placement details so the app can work out crop day, mortality % and stocking density.</p>
+        <div id="houseList"></div>
+        <button class="btn ghost" onclick="newHouse()" style="margin-top:6px">➕ Add a house</button>
+      </div>
+      <div class="card" id="houseFormCard" style="display:none">
+        <h2><span class="em">✏️</span> <span id="houseFormTitle">New house</span></h2>
+        <div class="fld"><label>House name / number</label><input type="text" id="h_name" placeholder="e.g. House 1"></div>
+        <div class="grid2">
+          <div class="fld"><label>Date placed</label><input type="date" id="h_placed" onchange="houseDensity()"></div>
+          <div class="fld"><label>Birds placed</label><input type="number" inputmode="numeric" id="h_birds" placeholder="e.g. 45000" oninput="houseDensity()"></div>
+        </div>
+        <div class="grid2">
+          <div class="fld"><label>Breed / strain</label><input type="text" id="h_breed" list="breedList" placeholder="Ross 308"><datalist id="breedList"><option value="Ross 308"></option><option value="Ross 708"></option><option value="Cobb 500"></option><option value="Cobb 700"></option><option value="Hubbard"></option></datalist></div>
+          <div class="fld"><label>House floor area</label><div class="unit"><input type="number" inputmode="decimal" id="h_area" placeholder="0" oninput="houseDensity()"><span class="u">m²</span></div></div>
+        </div>
+        <div class="grid2">
+          <div class="fld"><label>Target weight</label><div class="unit"><input type="number" inputmode="decimal" id="h_tweight" placeholder="2200"><span class="u">g</span></div></div>
+          <div class="fld"><label>Target / kill day</label><input type="number" inputmode="numeric" id="h_tday" placeholder="38"></div>
+        </div>
+        <div class="calc" id="h_density"></div>
+
+        <h2 style="margin:16px 0 10px"><span class="em">📋</span> Flock identity (Avara chart header)</h2>
+        <div class="grid2">
+          <div class="fld"><label>Cycle number</label><input type="text" id="h_cycle" placeholder="e.g. 3010"></div>
+          <div class="fld"><label>RT number</label><input type="text" id="h_rt" placeholder="e.g. 118"></div>
+        </div>
+        <p class="muted-sm" style="margin:0 0 10px">Flock code(s) and age are entered once on the delivery-note lines further down — no need to type them here.</p>
+        <div class="grid2">
+          <div class="fld"><label>Placement number</label><input type="text" id="h_placeno" placeholder="e.g. 24354"></div>
+          <div class="fld"><label>Floor / litter type</label><input type="text" id="h_littertype" placeholder="Shavings"></div>
+        </div>
+
+        <h2 style="margin:16px 0 10px"><span class="em">📦</span> Delivery note &amp; flock batches</h2>
+        <p class="section-note">From the hatchery delivery note. Chicks for one house can come from different hatcheries / parent flocks — add <b>one line per flock</b> and the app adds them up to give Birds placed (kept separately for audit &amp; traceability).</p>
+        <div class="grid2">
+          <div class="fld"><label>Delivery note no</label><input type="text" id="h_dnno" placeholder="e.g. 22292"></div>
+          <div class="fld"><label>Delivery date</label><input type="date" id="h_dndate"></div>
+        </div>
+        <div class="fld"><label>Hatchery</label><input type="text" id="h_dnhatch" placeholder="e.g. Avara Shobdon"></div>
+        <div id="batchList"></div>
+        <button class="btn ghost" type="button" onclick="addBatch()">➕ Add a flock line</button>
+        <div class="calc" id="batchSumBox" style="margin-top:8px"></div>
+        <div class="fld" style="margin-top:10px"><label>Vaccines on delivery note (name · batch · expiry)</label><textarea id="h_dnvacc" rows="2" placeholder="e.g. IBIRD lot 001PALLXH exp 09/07/26 · MASSL lot 00192M1CK exp 29/01/27"></textarea></div>
+        <div class="fld"><label>Arrival timings / lorry temps (optional)</label><input type="text" id="h_dntimes" placeholder="dep 04:55 · arrived 10:10 · first tip 11:40 · 25–26 °C"></div>
+
+        <div class="fld"><label>Water recording for this house</label>
+          <select class="fldsel" id="h_watermode"><option value="meter">Meter reading (manual)</option><option value="daily">Daily litres used (electronic system)</option></select></div>
+
+        <h2 style="margin:16px 0 10px"><span class="em">🌡️</span> Pre-placement &amp; calibration (once per crop)</h2>
+        <label class="chk" style="margin-bottom:10px"><input type="checkbox" id="h_predeliv">Pre-delivery check done</label>
+        <div class="fld"><label>Water meter reading at start</label><input type="number" inputmode="decimal" id="h_startmeter" placeholder="meter at placement"></div>
+        <label>Calibrations</label>
+        <div class="checks" style="margin-bottom:12px">
+          <label class="chk"><input type="checkbox" id="h_calT">Temp probe</label>
+          <label class="chk"><input type="checkbox" id="h_calH">Humidity probe</label>
+          <label class="chk"><input type="checkbox" id="h_calW">Weight cell</label>
+          <label class="chk"><input type="checkbox" id="h_luxok">Lux ≥ 20 recorded</label>
+        </div>
+        <label>Pre-heating — actual house temp (°C)</label>
+        <div class="grid3" style="margin-bottom:6px">
+          <div class="unit"><input type="number" inputmode="decimal" id="h_ph2" placeholder="2d"><span class="u">2d before</span></div>
+          <div class="unit"><input type="number" inputmode="decimal" id="h_ph1" placeholder="1d"><span class="u">1d before</span></div>
+          <div class="unit"><input type="number" inputmode="decimal" id="h_ph0" placeholder="day"><span class="u">placement</span></div>
+        </div>
+        <div class="fld"><label>Lux level recorded (min 20)</label><input type="number" inputmode="numeric" id="h_lux" placeholder="e.g. 26"></div>
+        <div class="fld"><label>Number of enrichment bales (start of crop)</label><input type="number" inputmode="numeric" id="h_enrichbales" placeholder="e.g. 60 (≈ 1.5 / 1000 birds)"></div>
+
+        <div class="btnrow"><button class="btn primary" onclick="saveHouse()">Save house</button><button class="btn sec" onclick="cancelHouse()">Cancel</button></div>
+        <button class="btn danger" id="houseDelBtn" style="display:none;margin-top:10px" onclick="deleteHouse()">Delete this house &amp; its records</button>
+      </div>
+      <div class="help"><b>Put it on your home screen:</b> open this file in Safari (iPhone) or Chrome (Android), tap <b>Share → Add to Home Screen</b>. It then opens like an app and works in the shed with no signal.</div>
+      <p class="muted-sm" style="text-align:center">Rhydimoor Farms Ltd · Broiler records</p>
+      <p class="muted-sm" style="text-align:center">© 2026 Rhydimoor Farms Ltd. All rights reserved — not to be copied or redistributed without permission.</p>
+    </section>
+  </main>
+</div>
+
+<nav class="tabs">
+  <button id="t-today" class="active" onclick="go('today')"><span class="ic">📝</span>Today</button>
+  <button id="t-meds" onclick="go('meds')"><span class="ic">💉</span>Meds</button>
+  <button id="t-charts" onclick="go('charts')"><span class="ic">📈</span>Charts</button>
+  <button id="t-records" onclick="go('records')"><span class="ic">📋</span>Records</button>
+  <button id="t-sheet" onclick="go('sheet')"><span class="ic">📄</span>Sheet</button>
+  <button id="t-export" onclick="go('export')"><span class="ic">📤</span>Export</button>
+  <button id="t-houses" onclick="go('houses')"><span class="ic">🏠</span>Houses</button>
+</nav>
+
+<div class="toast" id="toast"></div>
+<div id="printArea"></div>
+
+<script>
+/* ---------------- Data ---------------- */
+const KEY='broilerChartApp_v2';
+let DB={farm:{name:'',keeper:'',integrator:''},houses:[],days:{},walks:{},meds:{},auth:{pin:null},log:[],current:null};
+let editingHouse=null, editingMed=null, litterVal=null;
+let sessionAdmin=true;   // becomes false on load if a PIN is set
+
+function load(){ try{const r=localStorage.getItem(KEY); if(r) DB=JSON.parse(r);}catch(e){}
+  DB.farm=DB.farm||{name:'',keeper:'',integrator:''}; DB.houses=DB.houses||[];
+  DB.days=DB.days||{}; DB.walks=DB.walks||{}; DB.meds=DB.meds||{};
+  DB.auth=DB.auth||{pin:null}; DB.log=DB.log||[];
+  if(!DB.farm.name) DB.farm.name='Rhydimoor Farms Ltd';
+  if(!DB.farm.integrator) DB.farm.integrator='Avara';
+  if(!DB.current && DB.houses.length) DB.current=DB.houses[0].id;
+  sessionAdmin = !DB.auth.pin;   // no PIN set → full access; PIN set → start locked in operator mode
+  save(); }
+
+/* ---------------- Access control (soft PIN roles) ---------------- */
+function isAdmin(){ return sessionAdmin || !DB.auth.pin; }
+function requireAdmin(msg){ if(isAdmin()) return true; toast('🔒 '+(msg||'Admin only — switch to admin to do this')); return false; }
+function logAction(action,detail){ DB.log.push({ts:new Date().toISOString(),by:isAdmin()?'admin':'operator',action,detail:detail||''}); if(DB.log.length>500)DB.log=DB.log.slice(-500); }
+function updateLockUI(){ const b=document.getElementById('lockBtn'); if(!b)return;
+  if(!DB.auth.pin){ b.style.display='none'; }
+  else { b.style.display='inline-block'; b.textContent=isAdmin()?'🔓 Admin':'🔒 Operator'; } }
+function toggleLock(){ if(isAdmin()){ lockNow(); } else { go('houses'); setTimeout(()=>{const el=document.getElementById('a_unlock'); if(el)el.focus();},150); } }
+function lockNow(){ if(!DB.auth.pin){ toast('Set a PIN first'); go('houses'); return; } sessionAdmin=false; updateLockUI(); renderAccess(); renderHeader(); if(curHouse())loadEntryForDate(val('f_date')||today()); toast('🔒 Operator mode'); }
+function unlock(){ const p=val('a_unlock'); if(p && p===DB.auth.pin){ sessionAdmin=true; setv('a_unlock',''); updateLockUI(); renderAccess(); renderHeader(); if(curHouse())loadEntryForDate(val('f_date')||today()); toast('🔓 Admin mode'); } else toast('Wrong PIN'); }
+function setPin(){ if(!requireAdmin('Only admin can change the PIN'))return; const p=val('a_pin').trim(); if(p.length<4){toast('Use at least 4 digits');return;} DB.auth.pin=p; sessionAdmin=true; setv('a_pin',''); logAction('set pin'); save(); updateLockUI(); renderAccess(); toast('✓ PIN saved'); }
+function clearPin(){ if(!requireAdmin('Only admin can remove the PIN'))return; if(!confirm('Remove the PIN? Everyone will have full access.'))return; DB.auth.pin=null; sessionAdmin=true; logAction('clear pin'); save(); updateLockUI(); renderAccess(); toast('PIN removed'); }
+function renderAccess(){ const st=document.getElementById('accessState'); const ad=document.getElementById('accessAdmin'); const op=document.getElementById('accessOperator'); if(!st)return;
+  if(!DB.auth.pin){ st.textContent='No PIN set — everyone has full access.'; ad.style.display='block'; op.style.display='none'; }
+  else if(isAdmin()){ st.textContent='Admin mode — full access. A PIN is set, so the app opens in operator mode on each device.'; ad.style.display='block'; op.style.display='none'; }
+  else { st.textContent='Operator mode — add-only. Editing and deleting are locked.'; ad.style.display='none'; op.style.display='block'; } }
+function save(){ localStorage.setItem(KEY,JSON.stringify(DB)); }
+function uid(p){ return (p||'x')+Date.now().toString(36)+Math.random().toString(36).slice(2,5); }
+function curHouse(){ return DB.houses.find(h=>h.id===DB.current)||null; }
+function days(){ return (DB.days[DB.current]||[]).slice().sort((a,b)=>a.date<b.date?-1:1); }
+function walks(){ return (DB.walks[DB.current]||[]).slice(); }
+
+function num(id){ const v=parseFloat(document.getElementById(id).value); return isNaN(v)?null:v; }
+function val(id){ return document.getElementById(id).value; }
+function setv(id,v){ document.getElementById(id).value=(v===null||v===undefined)?'':v; }
+function today(){ return new Date().toISOString().slice(0,10); }
+function nowTime(){ return new Date().toTimeString().slice(0,5); }
+function fmt(n,d=0){ if(n===null||n===undefined||isNaN(n))return '—'; return Number(n).toLocaleString('en-GB',{minimumFractionDigits:d,maximumFractionDigits:d}); }
+function cropDay(placed,date){ if(!placed||!date)return null; return Math.round((new Date(date)-new Date(placed))/86400000); }
+function addDays(date,n){ const d=new Date(date); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),2200); }
+
+function cullTot(w){ return (w.leg||0)+(w.small||0)+(w.disease||0)+(w.other||0); }
+function walksOn(date){ return walks().filter(w=>w.date===date).sort((a,b)=>(a.time||'')<(b.time||'')?-1:1); }
+function dayTotals(date){ let dead=0,leg=0,small=0,disease=0,other=0; for(const w of walksOn(date)){dead+=w.dead||0;leg+=w.leg||0;small+=w.small||0;disease+=w.disease||0;other+=w.other||0;} const culls=leg+small+disease+other; return {dead,leg,small,disease,other,culls,dep:dead+culls}; }
+function balesOn(date){ return walksOn(date).reduce((s,w)=>s+(w.bales||0),0); }
+function cumTo(date){ let dead=0,culls=0; for(const w of walks()){ if(w.date<=date){dead+=w.dead||0;culls+=cullTot(w);} } return {dead,culls,dep:dead+culls}; }
+function cumThinTo(date){ let t=0; for(const e of days()){ if(e.date<=date && e.thin) t+=e.thin; } return t; }
+function prevRead(date){ let p=null; for(const e of days()){ if(e.date<date && e.meter!=null) p=e; } return p; }
+function readDT(date,mtime){ return new Date(date+'T'+((mtime&&/^\d\d:\d\d/.test(mtime))?mtime:'06:00')+':00'); }
+function intervalH(date,mtime,prev){ if(!prev)return null; if(!mtime||!prev.mtime)return 24; const h=(readDT(date,mtime)-readDT(prev.date,prev.mtime))/3600000; return h>0?h:24; }
+function prevAdj(date){ const es=days().filter(e=>e.date<date); for(let i=es.length-1;i>=0;i--){ const v=es[i].waterAdj!=null?es[i].waterAdj:es[i].waterL; if(v!=null) return v; } return null; }
+
+/* ---------------- Nav ---------------- */
+function go(v){ document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));
+  document.getElementById('v-'+v).classList.add('active');
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+  document.getElementById('t-'+v).classList.add('active'); window.scrollTo(0,0);
+  if(v==='charts')renderCharts(); if(v==='records')renderRecords(); if(v==='houses')renderHouses(); if(v==='meds')renderMeds(); if(v==='sheet')renderSheet();
+}
+
+/* ---------------- Header ---------------- */
+function renderHeader(){
+  const sel=document.getElementById('housePick'); sel.innerHTML='';
+  DB.houses.forEach(h=>{ const o=document.createElement('option'); o.value=h.id; o.textContent=h.name; if(h.id===DB.current)o.selected=true; sel.appendChild(o); });
+  document.getElementById('bizName').textContent='🐔 '+(DB.farm.name||'Broiler Chart');
+  document.getElementById('brandSub').textContent='Broiler daily records'+(DB.farm.integrator?' · '+DB.farm.integrator:'')+' · v3';
+  const h=curHouse(); const bar=document.getElementById('flockbar');
+  if(!h){ bar.innerHTML=''; document.getElementById('noHouse').style.display='block'; document.getElementById('entryWrap').style.display='none'; sel.style.display='none'; return; }
+  sel.style.display=''; document.getElementById('noHouse').style.display='none'; document.getElementById('entryWrap').style.display='block';
+  const selDate=(val('f_date')||today()); const c=cumTo(selDate); const thn=cumThinTo(selDate); const remaining=h.birds?h.birds-c.dep-thn:null; const day=cropDay(h.placed,selDate);
+  const lastW=[...days()].filter(e=>e.date<=selDate).reverse().find(e=>e.weight!=null);
+  bar.innerHTML=`
+    <div class="chip"><b>${day!=null?'Day '+day:'—'}</b><span>Crop age</span></div>
+    <div class="chip"><b>${remaining!=null?fmt(remaining):'—'}</b><span>Birds live</span></div>
+    <div class="chip"><b>${h.birds?fmt(c.dep/h.birds*100,2)+'%':'—'}</b><span>Cum mort</span></div>
+    <div class="chip"><b>${lastW?fmt(lastW.weight)+'g':'—'}</b><span>Last wt</span></div>`;
+}
+function selectHouse(id){ DB.current=id; save(); loadEntryForDate(today()); renderHeader(); refreshActiveView(); }
+function refreshActiveView(){ const a=document.querySelector('.view.active'); if(!a)return; const v=a.id.replace('v-',''); if(v==='charts')renderCharts(); else if(v==='records')renderRecords(); else if(v==='houses')renderHouses(); else if(v==='meds')renderMeds(); else if(v==='sheet')renderSheet(); }
+function applyWaterMode(){ const h=curHouse(); const daily=!!(h&&h.watermode==='daily');
+  const mw=document.getElementById('waterMeterWrap'); const dw=document.getElementById('waterDailyWrap');
+  if(mw)mw.style.display=daily?'none':''; if(dw)dw.style.display=daily?'':'none'; }
+
+/* ---------------- Entry form ---------------- */
+function onDateChange(){ loadEntryForDate(val('f_date')); }
+function setLitter(v){ litterVal=v; document.querySelectorAll('#litterPick button').forEach(b=>b.classList.toggle('on',+b.dataset.v===v)); }
+
+function loadEntryForDate(date){
+  const h=curHouse(); if(!h)return;
+  setv('f_date',date);
+  const day=cropDay(h.placed,date);
+  setv('f_age', day!=null?('Day '+day):'set placement date');
+  const e=(DB.days[DB.current]||[]).find(x=>x.date===date);
+  ['meter','waterdaily','feed','wheat','feedtype','weight','tmax','tmin','hmax','hmin','co2','nh3','dark','windows','thin','thintype','littercmt','notes'].forEach(k=>setv('f_'+k,e?e[k]:''));
+  applyWaterMode();
+  { const wv=e?e.windows:''; if(wv===0)setv('f_windows','No'); else if(typeof wv==='number'&&wv>0)setv('f_windows','Yes'); }
+  setv('f_mtime', e?(e.mtime||''):nowTime());
+  litterVal=e?e.litter:null; document.querySelectorAll('#litterPick button').forEach(b=>b.classList.toggle('on',e&&+b.dataset.v===e.litter));
+  ['alarm','dialout','generator','fireext','footdip'].forEach(k=>{ const el=document.getElementById('f_'+k); if(el)el.checked=!!(e&&e[k]); });
+  document.querySelectorAll('.chk').forEach(l=>{const i=l.querySelector('input'); if(i)l.classList.toggle('on',i.checked);});
+  setv('w_time',nowTime());
+  if(DB.lastOp){ if(['Andrew','Lawson','Jack'].includes(DB.lastOp)){ setv('w_opSel',DB.lastOp); } else { setv('w_opSel','Other'); setv('w_opOther',DB.lastOp); } }
+  opSync();
+  renderWalks(); recalc(); renderHeader();
+}
+
+function renderWalks(){
+  const date=val('f_date'); const list=document.getElementById('walkList'); const ws=walksOn(date);
+  const h=curHouse(); const day=h?cropDay(h.placed,date):null; const req=(day!=null&&day<=7)?3:2; const met=ws.length>=req;
+  const stat=`<div class="walkstat ${met?'ok':'low'}">Inspections today: <b>${ws.length}/${req}</b>${met?' ✓':' — '+(req-ws.length)+' more needed'}${(day!=null&&day<=7)?' · 3/day for the first 7 days':''}</div>`;
+  if(!ws.length){ list.innerHTML=stat+'<div class="walknone">No walks logged for this day yet. Add the first one below.</div>'; return; }
+  list.innerHTML=stat+ws.map(w=>{ const bits=[]; if(w.dead)bits.push(w.dead+' dead'); if(w.leg)bits.push(w.leg+' leg'); if(w.small)bits.push(w.small+' small'); if(w.disease)bits.push(w.disease+' disease'); if(w.other)bits.push(w.other+' other'); if(w.bales)bits.push(w.bales+' bale'+(w.bales>1?'s':'')+' out'); if(!bits.length)bits.push('nil found');
+    const del=isAdmin()?`<span class="wx" onclick="deleteWalk('${w.id}')">✕</span>`:'';
+    return `<div class="walkrow"><span class="wt">${w.time||'—'}</span><span class="wd">${bits.join(' · ')}<br><small>${w.op?escapeHtml(w.op):'—'}${w.note?' · '+escapeHtml(w.note):''}</small></span>${del}</div>`; }).join('');
+}
+function escapeHtml(s){ return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function opSync(){ const other=val('w_opSel')==='Other'; document.getElementById('w_opOther').style.display=other?'block':'none'; }
+function curOperator(){ const s=val('w_opSel'); return s==='Other'?val('w_opOther').trim():s; }
+
+function addWalk(){
+  const h=curHouse(); if(!h){toast('Add a house first');return;}
+  const date=val('f_date'); const dead=num('w_dead')||0, leg=num('w_leg')||0, small=num('w_small')||0, disease=num('w_disease')||0, other=num('w_other')||0; const bales=num('w_bales')||0;
+  const tot=dead+leg+small+disease+other;
+  if(tot===0 && bales===0 && !confirm('Log a walk with nil mortality found?')) return;
+  const w={id:uid('w'),date,time:val('w_time')||nowTime(),op:curOperator(),dead,leg,small,disease,other,bales,note:val('w_note').trim()};
+  if(!DB.walks[DB.current])DB.walks[DB.current]=[]; DB.walks[DB.current].push(w);
+  DB.lastOp=w.op; logAction('add walk',w.op+' '+date+' '+tot+' found'); save();
+  ['w_dead','w_leg','w_small','w_disease','w_other','w_bales','w_note'].forEach(i=>setv(i,'')); setv('w_time',nowTime());
+  renderWalks(); recalc(); renderHeader(); toast('✓ Walk added — '+tot+' found');
+}
+function deleteWalk(id){ if(!requireAdmin('Operators can add walks but not delete them'))return; const arr=DB.walks[DB.current]||[]; const i=arr.findIndex(w=>w.id===id); if(i<0)return;
+  if(!confirm('Remove this walk?'))return; logAction('delete walk',(arr[i].op||'')+' '+(arr[i].date||'')); arr.splice(i,1); save(); renderWalks(); recalc(); renderHeader(); toast('Walk removed'); }
+
+function recalc(){
+  const h=curHouse(); if(!h)return; const date=val('f_date');
+  const t=dayTotals(date); const cum=cumTo(date); const thinCum=cumThinTo(date);
+  const remaining=h.birds?h.birds-cum.dep-thinCum:null;
+  const dailyPct=h.birds?t.dep/h.birds*100:null; const cumPct=h.birds?cum.dep/h.birds*100:null;
+  document.getElementById('mortCalc').innerHTML=`
+    <div class="row"><span>Today — dead</span><b>${fmt(t.dead)}</b></div>
+    <div class="row"><span>Today — culls (leg ${fmt(t.leg)} · small ${fmt(t.small)} · disease ${fmt(t.disease)}${t.other?' · other '+fmt(t.other):''})</span><b>${fmt(t.culls)}</b></div>
+    <div class="row"><span>Cumulative dead</span><b>${fmt(cum.dead)}</b></div>
+    <div class="row"><span>Cumulative culls</span><b>${fmt(cum.culls)}</b></div>
+    ${thinCum?`<div class="row"><span>Taken — thin/clearance (cum)</span><b>${fmt(thinCum)}</b></div>`:''}
+    <div class="row"><span>Birds remaining</span><b>${remaining!=null?fmt(remaining):'—'}</b></div>
+    <div class="row big"><span>Cumulative mortality</span><b>${cumPct!=null?fmt(cumPct,2)+'%':'—'}</b></div>`;
+  const ma=document.getElementById('mortAlert');
+  if(dailyPct!=null && dailyPct>=1){ ma.classList.add('show'); ma.textContent=`⚠ Daily mortality ${fmt(dailyPct,2)}% — high. Investigate the cause and record it (notify integrator/vet if it persists).`; }
+  else ma.classList.remove('show');
+
+  const wc=document.getElementById('waterCalc'); const wa=document.getElementById('waterAlert');
+  if(h.watermode==='daily'){ const wd=num('f_waterdaily'); const feed=num('f_feed'); const wheat=num('f_wheat'); const totfeed=(feed||0)+(wheat||0); const per1000=(wd!=null&&remaining)?wd/(remaining/1000):null; const wf=(wd!=null&&totfeed>0)?wd/totfeed:null;
+    if(wd!=null){ wc.innerHTML=`<div class="row big"><span>Water used today</span><b>${fmt(wd)} L</b></div>
+      <div class="row"><span>Per 1,000 birds</span><b>${per1000!=null?fmt(per1000,1)+' L':'—'}</b></div>
+      ${totfeed>0?`<div class="row"><span>Feed + wheat (total ration)</span><b>${fmt(totfeed)} kg</b></div>`:''}
+      <div class="row"><span>Water : ration ratio</span><b>${wf!=null?fmt(wf,2):'—'}</b></div>`;
+      const pw=prevAdj(date);
+      if(pw!=null && pw>0 && wd<pw*0.85){ wa.classList.add('show'); wa.textContent=`⚠ Water down ${fmt((1-wd/pw)*100,0)}% on the previous day. A sudden drop is often the first sign of a health or equipment problem — check the birds and drinker lines.`; }
+      else wa.classList.remove('show');
+    } else { wc.innerHTML='<div class="row"><span>Enter today’s litres used (from the printout)</span><b></b></div>'; wa.classList.remove('show'); }
+    const w2=num('f_weight'); const wcl2=document.getElementById('weightCalc');
+    if(w2!=null){ let line=`<div class="row big"><span>Average weight</span><b>${fmt(w2)} g</b></div>`; if(h.tweight){ line+=`<div class="row"><span>Of target (${fmt(h.tweight)}g)</span><b>${fmt(w2/h.tweight*100,0)}%</b></div>`; } wcl2.innerHTML=line; } else wcl2.innerHTML='<div class="row"><span>Enter today’s sample weight</span><b></b></div>';
+    return;
+  }
+  const meter=num('f_meter'); const mtime=val('f_mtime'); const pr=prevRead(date);
+  if(meter!=null && pr){ const raw=meter-pr.meter; const ih=intervalH(date,mtime,pr); const adj=(ih&&ih>0)?raw*24/ih:raw;
+    const per1000=remaining?adj/(remaining/1000):null; const feed=num('f_feed'); const wheat=num('f_wheat'); const totfeed=(feed||0)+(wheat||0); const wf=(totfeed>0)?adj/totfeed:null;
+    const adjNote=(mtime&&pr.mtime)?` <span style="font-weight:400">(over ${fmt(ih,1)} h)</span>`:' <span style="font-weight:400">(times not set — assumed 24 h)</span>';
+    wc.innerHTML=`<div class="row"><span>Previous reading${pr.mtime?' ('+pr.mtime+')':''}</span><b>${fmt(pr.meter)}</b></div>
+      <div class="row"><span>Raw usage${adjNote}</span><b>${fmt(raw)} L</b></div>
+      <div class="row big"><span>Adjusted 24 h use</span><b>${fmt(adj)} L</b></div>
+      <div class="row"><span>Per 1,000 birds (24 h)</span><b>${per1000!=null?fmt(per1000,1)+' L':'—'}</b></div>
+      ${totfeed>0?`<div class="row"><span>Feed + wheat (total ration)</span><b>${fmt(totfeed)} kg</b></div>`:''}
+      <div class="row"><span>Water : ration ratio (24 h)</span><b>${wf!=null?fmt(wf,2):'—'}</b></div>`;
+    const pw=prevAdj(date);
+    if(raw<0){ wa.classList.add('show'); wa.textContent='⚠ Reading is lower than the previous one — check the meter number.'; }
+    else if(pw!=null && pw>0 && adj<pw*0.85){ wa.classList.add('show'); wa.textContent=`⚠ Water down ${fmt((1-adj/pw)*100,0)}% on the last reading (24 h-adjusted). A sudden drop is often the first sign of a health or equipment problem — check the birds and drinker lines.`; }
+    else wa.classList.remove('show');
+  } else if(meter!=null && !pr){ wc.innerHTML=`<div class="row"><span>First reading recorded${mtime?' ('+mtime+')':''}</span><b>${fmt(meter)}</b></div><div class="row"><span>Daily usage</span><b>shows from tomorrow</b></div>`; wa.classList.remove('show'); }
+  else { wc.innerHTML='<div class="row"><span>Enter the meter reading to see usage</span><b></b></div>'; wa.classList.remove('show'); }
+
+  const w=num('f_weight'); const wcl=document.getElementById('weightCalc');
+  if(w!=null){ let line=`<div class="row big"><span>Average weight</span><b>${fmt(w)} g</b></div>`; if(h.tweight){ line+=`<div class="row"><span>Of target (${fmt(h.tweight)}g)</span><b>${fmt(w/h.tweight*100,0)}%</b></div>`; } wcl.innerHTML=line; }
+  else wcl.innerHTML='<div class="row"><span>Enter today’s sample weight</span><b></b></div>';
+}
+
+function saveEntry(){
+  const h=curHouse(); if(!h){toast('Add a house first');return;}
+  const date=val('f_date'); if(!date){toast('Pick a date');return;}
+  if(!DB.days[DB.current])DB.days[DB.current]=[]; const arr=DB.days[DB.current]; const i=arr.findIndex(x=>x.date===date);
+  if(i>=0 && !isAdmin()){
+    const p=prompt('🔒 This day is already saved. Enter the admin PIN to update it — everything you have typed will be kept:');
+    if(p===null) return;
+    if(p!==DB.auth.pin){ toast('Wrong PIN — not saved'); return; }
+    sessionAdmin=true; updateLockUI(); renderAccess(); renderHeader();
+  }
+  const ck=id=>{ const el=document.getElementById(id); return el?el.checked:false; };
+  const meter=num('f_meter');
+  const e={date,meter,mtime:val('f_mtime'),waterdaily:num('f_waterdaily'),feed:num('f_feed'),wheat:num('f_wheat'),feedtype:val('f_feedtype'),weight:num('f_weight'),
+    tmax:num('f_tmax'),tmin:num('f_tmin'),hmax:num('f_hmax'),hmin:num('f_hmin'),
+    co2:num('f_co2'),nh3:num('f_nh3'),dark:num('f_dark'),windows:val('f_windows'),thin:num('f_thin'),thintype:val('f_thintype'),
+    litter:litterVal,littercmt:val('f_littercmt'),
+    alarm:ck('f_alarm'),dialout:ck('f_dialout'),generator:ck('f_generator'),fireext:ck('f_fireext'),footdip:ck('f_footdip'),
+    notes:val('f_notes')};
+  const rf=[]; const rchk=(v,lo,hi,lbl,u)=>{ if(v!=null&&(v<lo||v>hi)) rf.push(lbl+': '+v+(u||'')); };
+  rchk(e.tmax,8,45,'Temp max','°C'); rchk(e.tmin,5,45,'Temp min','°C');
+  rchk(e.hmax,10,100,'Humidity max','%'); rchk(e.hmin,5,100,'Humidity min','%');
+  rchk(e.co2,0,8000,'CO₂','ppm'); rchk(e.nh3,0,50,'Ammonia','ppm');
+  if(e.tmax!=null&&e.tmin!=null&&e.tmin>e.tmax) rf.push('Temp min is higher than temp max');
+  if(rf.length && !confirm('These figures look outside the usual range — please double-check:\n\n• '+rf.join('\n• ')+'\n\nSave anyway?')) return;
+  if(e.thin>0){
+    const others=(DB.days[DB.current]||[]).filter(x=>x.date!==date && x.thin>0);
+    const remaining=h.birds?h.birds-cumTo('9999').dep-cumThinTo('9999'):null;
+    const tw=[];
+    if(others.length) tw.push('A thinning is already recorded on: '+others.map(x=>x.date+' ('+fmt(x.thin)+')').join(', ')+'. Check you are not entering the same thin twice.');
+    if(remaining && e.thin>remaining*0.3) tw.push('This thin ('+fmt(e.thin)+') is over 30% of the current flock (~'+fmt(Math.round(remaining))+'). Double-check the figure.');
+    if(tw.length && !confirm('⚠ Thinning check:\n\n• '+tw.join('\n• ')+'\n\nSave this thinning?')) return;
+  }
+  if(i>=0)arr[i]=e; else arr.push(e);
+  logAction(i>=0?'edit day':'save day',date);
+  recomputeWater(); save(); renderHeader(); toast('✓ Day saved'); recalc();
+}
+function recomputeWaterArr(arr){ const a=arr.slice().sort((x,y)=>x.date<y.date?-1:1); let prev=null;
+  for(const e of a){ if(e.waterdaily!=null){ e.waterL=e.waterdaily; e.waterAdj=e.waterdaily; e.intervalH=24; }
+  else if(e.meter!=null){
+    if(prev){ const raw=e.meter-prev.meter; const ih=intervalH(e.date,e.mtime,prev); e.waterL=raw; e.intervalH=ih; e.waterAdj=(ih&&ih>0)?raw*24/ih:raw; }
+    else { e.waterL=null; e.waterAdj=null; e.intervalH=null; }
+    prev=e;
+  } else { e.waterL=null; e.waterAdj=null; e.intervalH=null; } } }
+function recomputeWater(){ recomputeWaterArr(DB.days[DB.current]||[]); }
+
+/* ---------------- Medicines ---------------- */
+function medList(){ return (DB.meds[DB.current]||[]).slice().sort((a,b)=>(a.start||'')<(b.start||'')?1:-1); }
+function renderMeds(){
+  const wrap=document.getElementById('medList'); const ms=medList();
+  if(!curHouse()){ wrap.innerHTML='<p class="muted-sm">Add a house first.</p>'; return; }
+  if(!ms.length){ wrap.innerHTML='<div class="walknone">No treatments logged for this house yet.</div>'; return; }
+  const ic={Vaccine:'💉',Antibiotic:'🧪',Medicine:'💊',Supplement:'🟢'};
+  wrap.innerHTML=ms.map(m=>{ const clear=(m.end&&m.wd!=null)?addDays(m.end,m.wd):null;
+    return `<div class="medrow" onclick="editMed('${m.id}')">
+      <div class="mt"><span>${ic[m.type]||'💊'} ${escapeHtml(m.product||m.type)}</span><span class="pill">edit</span></div>
+      <div class="ms">${m.type}${m.route?' · '+m.route:''}${m.start?' · '+m.start:''}${m.end&&m.end!==m.start?'→'+m.end:''}${m.birds?' · '+escapeHtml(m.birds):''}${m.vet?' · vet '+escapeHtml(m.vet):''}</div>
+      ${clear?`<span class="wdtag">Clear for slaughter from ${clear} (${m.wd}d withdrawal)</span>`:(m.type==='Vaccine'?'<span class="wdtag">No meat withdrawal</span>':'')}
+    </div>`; }).join('');
+}
+function medFormSync(){ const t=val('m_type'); document.getElementById('vetWrap').style.display=(t==='Antibiotic'||t==='Medicine')?'grid':'none';
+  document.getElementById('wdWrap').style.display=(t==='Vaccine')?'none':'block'; }
+function medCalc(){ const end=val('m_end'),wd=num('m_wd'); const box=document.getElementById('medCalcBox');
+  if(end&&wd!=null){ box.innerHTML=`<div class="row big"><span>Earliest slaughter date</span><b>${addDays(end,wd)}</b></div><div class="row"><span>${wd} day withdrawal after last treatment</span><b></b></div>`; }
+  else box.innerHTML='<div class="row"><span>Enter end date + withdrawal for clearance date</span><b></b></div>'; }
+function newMed(){ editingMed=null; document.getElementById('medFormTitle').textContent='New entry';
+  ['m_product','m_batch','m_expiry','m_dose','m_birds','m_admin','m_vet','m_rx','m_reason'].forEach(i=>setv(i,''));
+  setv('m_type','Vaccine'); setv('m_start',today()); setv('m_end',today()); setv('m_wd','');
+  document.getElementById('medDelBtn').style.display='none'; medFormSync(); medCalc();
+  document.getElementById('medFormCard').style.display='block'; document.getElementById('medFormCard').scrollIntoView({behavior:'smooth'}); }
+function editMed(id){ const m=(DB.meds[DB.current]||[]).find(x=>x.id===id); if(!m)return; editingMed=id;
+  document.getElementById('medFormTitle').textContent=m.product||'Entry';
+  setv('m_type',m.type);setv('m_product',m.product);setv('m_batch',m.batch);setv('m_expiry',m.expiry);
+  setv('m_start',m.start);setv('m_end',m.end);setv('m_dose',m.dose);setv('m_route',m.route);setv('m_wd',m.wd);
+  setv('m_birds',m.birds);setv('m_admin',m.admin);setv('m_vet',m.vet);setv('m_rx',m.rx);setv('m_reason',m.reason);
+  document.getElementById('medDelBtn').style.display='block'; medFormSync(); medCalc();
+  document.getElementById('medFormCard').style.display='block'; document.getElementById('medFormCard').scrollIntoView({behavior:'smooth'}); }
+function cancelMed(){ document.getElementById('medFormCard').style.display='none'; }
+function saveMed(){ const product=val('m_product').trim(); if(!product){toast('Enter the product name');return;}
+  const data={type:val('m_type'),product,batch:val('m_batch'),expiry:val('m_expiry'),start:val('m_start'),end:val('m_end'),
+    dose:val('m_dose'),route:val('m_route'),wd:num('m_wd'),birds:val('m_birds'),admin:val('m_admin'),vet:val('m_vet'),rx:val('m_rx'),reason:val('m_reason')};
+  if(!DB.meds[DB.current])DB.meds[DB.current]=[];
+  if(editingMed){ if(!requireAdmin('Only admin can change an existing treatment record'))return; const m=DB.meds[DB.current].find(x=>x.id===editingMed); Object.assign(m,data); logAction('edit med',product); }
+  else { DB.meds[DB.current].push(Object.assign({id:uid('m')},data)); logAction('add med',product); }
+  save(); document.getElementById('medFormCard').style.display='none'; renderMeds(); toast('✓ Saved'); }
+function deleteMed(){ if(!requireAdmin('Only admin can delete a treatment record'))return; if(!editingMed)return; if(!confirm('Delete this treatment record?'))return;
+  DB.meds[DB.current]=(DB.meds[DB.current]||[]).filter(x=>x.id!==editingMed); save();
+  document.getElementById('medFormCard').style.display='none'; renderMeds(); toast('Deleted'); }
+
+/* ---------------- Records ---------------- */
+function renderRecords(){
+  const h=curHouse(); const wrap=document.getElementById('recTable');
+  const dset=days(); const allDates=new Set(dset.map(e=>e.date)); walks().forEach(w=>allDates.add(w.date)); if(h.placed)allDates.add(h.placed);
+  const dates=[...allDates].sort();
+  if(!h||!dates.length){ wrap.innerHTML='<div class="empty"><div class="big">📋</div><p>No days recorded yet.</p></div>'; document.getElementById('recCount').textContent='Tap a day to open it.'; return; }
+  document.getElementById('recCount').textContent=dates.length+' day'+(dates.length>1?'s':'')+' — tap a date to open it.';
+  let cum=0,cumThin=0;
+  const rows=dates.map(date=>{ const e=dset.find(x=>x.date===date)||{}; const t=dayTotals(date); cum+=t.dep; cumThin+=e.thin||0;
+    const rem=h.birds?h.birds-cum-cumThin:null; const wuse=e.waterAdj!=null?e.waterAdj:e.waterL; const per1000=(wuse!=null&&rem)?wuse/(rem/1000):null; const dpct=h.birds?t.dep/h.birds*100:null; const cpct=h.birds?cum/h.birds*100:null; const day=cropDay(h.placed,date);
+    return `<tr>
+      <td class="rec-edit" onclick="editDay('${date}')">${date.slice(8)}/${date.slice(5,7)} ${day!=null?'(d'+day+')':''}</td>
+      <td class="${dpct>=1?'flag':''}">${fmt(t.dead)}</td><td>${fmt(t.culls)}</td><td>${fmt(cum)}</td>
+      <td>${dpct!=null?fmt(dpct,2):'—'}</td><td>${cpct!=null?fmt(cpct,2):'—'}</td>
+      <td>${e.thin?fmt(e.thin):'—'}</td><td>${rem!=null?fmt(rem):'—'}</td><td>${e.weight!=null?fmt(e.weight):'—'}</td>
+      <td>${e.meter!=null?fmt(e.meter):'—'}</td><td>${e.mtime||'—'}</td>
+      <td>${wuse!=null?fmt(wuse):'—'}</td><td>${per1000!=null?fmt(per1000,1):'—'}</td>
+      <td>${e.feed!=null?fmt(e.feed):'—'}</td><td>${e.wheat!=null?fmt(e.wheat):'—'}</td><td>${e.feedtype?escapeHtml(e.feedtype):'—'}</td><td>${e.tmax!=null?fmt(e.tmax,1):'—'}/${e.tmin!=null?fmt(e.tmin,1):'—'}</td>
+      <td>${e.hmax!=null?fmt(e.hmax):'—'}/${e.hmin!=null?fmt(e.hmin):'—'}</td><td>${e.co2!=null?fmt(e.co2):'—'}</td><td>${e.nh3!=null?fmt(e.nh3):'—'}</td><td>${e.dark!=null?fmt(e.dark,1):'—'}</td>
+      <td>${e.litter!=null?e.litter:'—'}</td><td>${walksOn(date).length||'—'}</td></tr>`; }).join('');
+  wrap.innerHTML=`<table><thead><tr><th>Day</th><th>Dead</th><th>Cull</th><th>Cum</th><th>DMR%</th><th>CDMR%</th><th>Thin</th><th>Live</th><th>Wt g</th><th>Meter</th><th>Time</th><th>Water 24h</th><th>L/1k</th><th>Feed</th><th>Wheat</th><th>Phase</th><th>Temp °C</th><th>Hum %</th><th>CO₂</th><th>NH₃</th><th>Dark</th><th>Litt</th><th>Walks</th></tr></thead><tbody>${rows}</tbody></table>`;
+  renderNotesLog();
+  if(!val('opFrom')||!val('opTo'))setOpRange(7); else renderOperatorReport();
+}
+function notesItems(){ const h=curHouse(); if(!h)return [];
+  const items=[];
+  days().forEach(e=>{ if(e.notes && !/^Projected/.test(e.notes)) items.push({date:e.date,src:'Day note',txt:e.notes});
+    if(e.littercmt) items.push({date:e.date,src:'Litter',txt:e.littercmt}); });
+  walks().forEach(w=>{ if(w.note && !/^Projected/.test(w.note)) items.push({date:w.date,src:'Walk · '+(w.op||'—')+(w.time?' '+w.time:''),txt:w.note}); });
+  return items.sort((a,b)=>a.date<b.date?-1:1); }
+function renderNotesLog(){ const nl=document.getElementById('notesLog'); if(!nl)return; const h=curHouse(); const items=notesItems();
+  nl.innerHTML=items.length?items.map(it=>{ const day=h?cropDay(h.placed,it.date):null;
+    return `<div class="walkrow"><span class="wt">${it.date.slice(8)}/${it.date.slice(5,7)}${day!=null?'<br><small>d'+day+'</small>':''}</span><span class="wd">${escapeHtml(it.txt)}<br><small>${escapeHtml(it.src)}</small></span></div>`; }).join('')
+  :'<div class="walknone">No notes yet. Anything typed in "Notes / actions taken", a litter comment or a walk note appears here.</div>'; }
+function editDay(date){ go('today'); loadEntryForDate(date); toast('Opened '+date); }
+
+/* ---------------- By-operator report (across houses) ---------------- */
+function houseById(id){ return DB.houses.find(h=>h.id===id)||null; }
+function scopedWalks(){ const scope=(document.getElementById('opHouse')||{}).value||''; const out=[];
+  DB.houses.forEach(h=>{ if(scope&&scope!==h.id)return; (DB.walks[h.id]||[]).forEach(w=>out.push(Object.assign({houseId:h.id,houseName:h.name,placed:h.placed},w))); }); return out; }
+function operatorsPresent(){ const s=new Set(); scopedWalks().forEach(w=>{ if(w.op)s.add(w.op); }); return [...s].sort(); }
+function walksInRange(from,to,op){ return scopedWalks().filter(w=>{ if(from&&w.date<from)return false; if(to&&w.date>to)return false; if(op&&w.op!==op)return false; return true; }); }
+function setOpRange(n){ const ds=[...new Set(scopedWalks().map(w=>w.date))].sort(); if(!ds.length){renderOperatorReport();return;} const last=ds[ds.length-1]; let first=ds[0]; if(n>0)first=addDays(last,-(n-1)); if(first<ds[0])first=ds[0]; setv('opFrom',first); setv('opTo',last); renderOperatorReport(); }
+function syncOpHouseOptions(){ const sel=document.getElementById('opHouse'); if(!sel)return; const cur=sel.value;
+  sel.innerHTML='<option value="">All houses</option>'+DB.houses.map(h=>`<option value="${h.id}">${escapeHtml(h.name)}</option>`).join('');
+  if([...sel.options].some(o=>o.value===cur))sel.value=cur; }
+function renderOperatorReport(){ const box=document.getElementById('opReport'); if(!box)return; syncOpHouseOptions();
+  const sel=document.getElementById('opFilter'); const cur=sel.value; const ops=operatorsPresent();
+  sel.innerHTML='<option value="">All operators</option>'+ops.map(o=>`<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('');
+  if([...sel.options].some(o=>o.value===cur))sel.value=cur;
+  const from=val('opFrom'),to=val('opTo'),filt=sel.value; const ws=walksInRange(from,to,filt);
+  if(!ws.length){ box.innerHTML='<div class="empty" style="padding:18px 0"><p>No walks in this range.</p></div>'; return; }
+  const map={}; ws.forEach(w=>{ const k=w.op||'(unnamed)'; const m=map[k]||(map[k]={walks:0,dead:0,leg:0,small:0,disease:0,other:0,days:new Set(),houses:new Set()}); m.walks++; m.dead+=w.dead||0; m.leg+=w.leg||0; m.small+=w.small||0; m.disease+=w.disease||0; m.other+=w.other||0; m.days.add(w.date); m.houses.add(w.houseId); });
+  const rows=Object.keys(map).sort().map(k=>{ const m=map[k]; const culls=m.leg+m.small+m.disease+m.other; const dep=m.dead+culls;
+    return `<tr><td style="text-align:left;font-weight:600">${escapeHtml(k)}</td><td>${m.houses.size}</td><td>${m.days.size}</td><td>${m.walks}</td><td>${fmt(m.dead)}</td><td>${fmt(m.leg)}</td><td>${fmt(m.small)}</td><td>${fmt(m.disease)}</td><td>${fmt(culls)}</td><td><b>${fmt(dep)}</b></td></tr>`; }).join('');
+  let tD=0,tL=0,tS=0,tDi=0,tO=0,tW=0; const allDays=new Set(),allH=new Set(); ws.forEach(w=>{tD+=w.dead||0;tL+=w.leg||0;tS+=w.small||0;tDi+=w.disease||0;tO+=w.other||0;tW++;allDays.add(w.date);allH.add(w.houseId);});
+  const totRow=`<tr style="border-top:2px solid var(--line);font-weight:700"><td style="text-align:left">All</td><td>${allH.size}</td><td>${allDays.size}</td><td>${tW}</td><td>${fmt(tD)}</td><td>${fmt(tL)}</td><td>${fmt(tS)}</td><td>${fmt(tDi)}</td><td>${fmt(tL+tS+tDi+tO)}</td><td>${fmt(tD+tL+tS+tDi+tO)}</td></tr>`;
+  const hsel=document.getElementById('opHouse').value; const scopeName=hsel?((houseById(hsel)||{}).name||''):'all houses';
+  let html=`<p class="section-note" style="margin:4px 0">${from||'start'} → ${to||'latest'} · ${escapeHtml(scopeName)}</p><div class="tbl-scroll"><table><thead><tr><th style="text-align:left">Operator</th><th>Houses</th><th>Days</th><th>Walks</th><th>Dead</th><th>Leg</th><th>Small</th><th>Disease</th><th>Culls</th><th>Total</th></tr></thead><tbody>${rows}${totRow}</tbody></table></div>`;
+  if(filt){ const det=ws.slice().sort((a,b)=>(a.date+a.houseName+a.time)<(b.date+b.houseName+b.time)?-1:1).map(w=>{ const day=cropDay(w.placed,w.date);
+      return `<tr><td style="text-align:left">${escapeHtml(w.houseName||'')}</td><td style="text-align:left">${w.date.slice(8)}/${w.date.slice(5,7)}${day!=null?' (d'+day+')':''}</td><td>${w.time||'—'}</td><td>${fmt(w.dead||0)}</td><td>${fmt(w.leg||0)}</td><td>${fmt(w.small||0)}</td><td>${fmt(w.disease||0)}</td><td style="text-align:left">${escapeHtml(w.note||'')}</td></tr>`; }).join('');
+    html+=`<p class="section-note" style="margin:12px 0 4px"><b>${escapeHtml(filt)}</b> — every walk in range</p><div class="tbl-scroll"><table><thead><tr><th style="text-align:left">House</th><th style="text-align:left">Day</th><th>Time</th><th>Dead</th><th>Leg</th><th>Small</th><th>Disease</th><th style="text-align:left">Note</th></tr></thead><tbody>${det}</tbody></table></div>`; }
+  box.innerHTML=html;
+}
+function exportOperatorCSV(){ const from=val('opFrom'),to=val('opTo'),filt=document.getElementById('opFilter').value;
+  const ws=walksInRange(from,to,filt).sort((a,b)=>(a.date+a.houseName+a.time)<(b.date+b.houseName+b.time)?-1:1);
+  if(!ws.length){toast('No walks in this range');return;}
+  const lines=['House,Date,Crop day,Time,Operator,Dead,Leg,Small,Disease,Other,Total,Note'];
+  ws.forEach(w=>{ const tot=(w.dead||0)+(w.leg||0)+(w.small||0)+(w.disease||0)+(w.other||0); lines.push([w.houseName,w.date,cropDay(w.placed,w.date),w.time,w.op,w.dead,w.leg,w.small,w.disease,w.other,tot,w.note].map(csvEsc).join(',')); });
+  download(fname('by-operator')+'.csv',lines.join('\n'),'text/csv'); toast('✓ Per-operator log downloaded'); }
+
+/* ---------------- Charts ---------------- */
+let CHARTXMIN=null,CHARTXMAX=null;
+function lineChart(series,opts){
+  const W=opts.w||640,H=opts.h||220,pl=44,pr=12,pt=12,pb=28;
+  const allY=series.flatMap(s=>s.points.map(p=>p.y)); if(!allY.length)return '';
+  let yMax=opts.yMax!=null?opts.yMax:Math.max(...allY,1); let yMin=opts.yMin!=null?opts.yMin:Math.min(0,...allY); if(yMax===yMin)yMax=yMin+1;
+  const allX=series.flatMap(s=>s.points.map(p=>p.x)); const xMin=(CHARTXMIN!=null)?CHARTXMIN:Math.min(...allX); const xMax=(CHARTXMAX!=null)?CHARTXMAX:Math.max(...allX,xMin+1);
+  const sx=x=>pl+(x-xMin)/(xMax-xMin||1)*(W-pl-pr); const sy=y=>pt+(1-(y-yMin)/(yMax-yMin))*(H-pt-pb);
+  let g=`<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
+  for(let i=0;i<=4;i++){ const yy=yMin+(yMax-yMin)*i/4; const py=sy(yy);
+    g+=`<line x1="${pl}" y1="${py}" x2="${W-pr}" y2="${py}" stroke="#e6ece7"/><text x="${pl-6}" y="${py+3}" font-size="10" fill="#8a978e" text-anchor="end">${fmt(yy,yMax<10?1:0)}</text>`; }
+  const xt=Math.min(6,Math.max(1,xMax-xMin)); for(let i=0;i<=xt;i++){ const xv=Math.round(xMin+(xMax-xMin)*i/xt); const px=sx(xv);
+    g+=`<text x="${px}" y="${H-8}" font-size="10" fill="#8a978e" text-anchor="middle">${xv}</text>`; }
+  series.forEach(s=>{ if(!s.points.length)return; const d=s.points.map((p,i)=>(i?'L':'M')+sx(p.x)+' '+sy(p.y)).join(' ');
+    if(s.fill){ g+=`<path d="${d} L ${sx(s.points[s.points.length-1].x)} ${sy(yMin)} L ${sx(s.points[0].x)} ${sy(yMin)} Z" fill="${s.color}" opacity="0.12"/>`; }
+    g+=`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.dash?1.8:2.4}"${s.dash?' stroke-dasharray="6 4"':''} stroke-linejoin="round" stroke-linecap="round"/>`;
+    if(!s.dash&&!s.nodots) s.points.forEach(p=>g+=`<circle cx="${sx(p.x)}" cy="${sy(p.y)}" r="2.6" fill="${s.color}"/>`); });
+  return g+`</svg>`;
+}
+const ROSS308_WT=[[1,58],[2,74],[3,91],[4,111],[5,134],[6,160],[7,188],[8,220],[9,254],[10,292],[11,335],[12,383],[13,434],[14,490],[15,549],[16,613],[17,680],[18,750],[19,824],[20,899],[21,975],[22,1051],[23,1128],[24,1206],[25,1284],[26,1362],[27,1446],[28,1535],[29,1626],[30,1718],[31,1811],[32,1906],[33,2001],[34,2097],[35,2194],[36,2291],[37,2388],[38,2485],[39,2583],[40,2680],[41,2778],[42,2874],[43,2971],[44,3067],[45,3163],[46,3258],[47,3352],[48,3446],[49,3539]];
+const ROSS308_CM=[[1,0.23],[2,0.42],[3,0.61],[4,0.82],[5,1.02],[6,1.21],[7,1.39],[8,1.48],[9,1.57],[10,1.66],[11,1.75],[12,1.84],[13,1.93],[14,2.02],[15,2.11],[16,2.2],[17,2.29],[18,2.38],[19,2.47],[20,2.56],[21,2.64],[22,2.73],[23,2.82],[24,2.91],[25,3.0],[26,3.09],[27,3.18],[28,3.27],[29,3.36],[30,3.45],[31,3.54],[32,3.63],[33,3.72],[34,3.81],[35,3.9],[36,3.99],[37,4.08],[38,4.17],[39,4.32],[40,4.47],[41,4.62],[42,4.77],[43,4.92],[44,5.07],[45,5.22],[46,5.37],[47,5.52],[48,5.67],[49,5.82]];
+function renderCharts(){
+  const h=curHouse(); const wrap=document.getElementById('chartsWrap'); const empty=document.getElementById('chartsEmpty');
+  const dset=days(); const allDates=new Set(dset.map(e=>e.date)); walks().forEach(w=>allDates.add(w.date)); const dates=[...allDates].sort();
+  if(!h||!dates.length){ empty.style.display='block'; wrap.innerHTML=''; return; } empty.style.display='none';
+  let cum=0,cumThin=0; const rows=dates.map(date=>{ const e=dset.find(x=>x.date===date)||{}; const t=dayTotals(date); cum+=t.dep; cumThin+=e.thin||0;
+    const rem=h.birds?h.birds-cum-cumThin:null; const day=cropDay(h.placed,date)||0; const wuse=e.waterAdj!=null?e.waterAdj:e.waterL;
+    return {day,e,t,cum,rem,wuse,per1000:(wuse!=null&&rem)?wuse/(rem/1000):null,cumPct:h.birds?cum/h.birds*100:null}; });
+  const maxDay=rows.length?Math.max(...rows.map(r=>r.day)):0; CHARTXMIN=0; CHARTXMAX=Math.max(44,maxDay); const tgt=a=>a.filter(p=>p[0]>=1&&p[0]<=maxDay).map(p=>({x:p[0],y:p[1]}));
+  const W=640; let html='';
+  const wp=rows.filter(r=>r.wuse!=null).map(r=>({x:r.day,y:r.wuse}));
+  const mtr=rows.filter(r=>r.e.meter!=null).map(r=>({x:r.day,y:r.e.meter}));
+  const w1000=rows.filter(r=>r.per1000!=null).map(r=>({x:r.day,y:r.per1000}));
+  const dead=rows.map(r=>({x:r.day,y:r.t.dead})); const culls=rows.map(r=>({x:r.day,y:r.t.culls}));
+  const cmp=rows.filter(r=>r.cumPct!=null).map(r=>({x:r.day,y:r.cumPct}));
+  const wt=rows.filter(r=>r.e.weight!=null).map(r=>({x:r.day,y:r.e.weight}));
+  const tmax=rows.filter(r=>r.e.tmax!=null).map(r=>({x:r.day,y:r.e.tmax})); const tmin=rows.filter(r=>r.e.tmin!=null).map(r=>({x:r.day,y:r.e.tmin}));
+  if(wp.length) html+=`<div class="chart-card"><h3>💧 Water — litres per day (24 h-adjusted)</h3><p class="sub">Normalised to a true 24 h so read-times don't skew it. Watch for sudden drops.</p>${lineChart([{points:wp,color:'#2a7de1',fill:true}],{w:W,h:210,yMin:0})}</div>`;
+  /* Raw meter-reading chart removed per Andrew (13 Jul) — the boys only need the rolling 24 h water on the graphs. */
+  if(w1000.length) html+=`<div class="chart-card"><h3>💧 Water per 1,000 birds (24 h)</h3><p class="sub">Should rise steadily with age.</p>${lineChart([{points:w1000,color:'#1aa3a3',fill:true}],{w:W,h:200,yMin:0})}</div>`;
+  html+=`<div class="chart-card"><h3>📉 Mortality — dead vs culls</h3><p class="sub">Daily, summed across all walks.</p>${lineChart([{points:dead,color:'#c4341f'},{points:culls,color:'#b8860b'}],{w:W,h:190,yMin:0})}<div class="legend"><span><i style="background:#c4341f"></i>Dead</span><span><i style="background:#b8860b"></i>Culls</span></div></div>`;
+  if(cmp.length){ const tcm=tgt(ROSS308_CM); html+=`<div class="chart-card"><h3>📊 Cumulative mortality %</h3><p class="sub">Vs the Ross 308 target (dashed). Watch the gradient.</p>${lineChart([{points:cmp,color:'#9c1d0c',fill:true},{points:tcm,color:'#8a978e',dash:true}],{w:W,h:180,yMin:0})}<div class="legend"><span><i style="background:#9c1d0c"></i>Actual</span><span><i style="background:#8a978e"></i>Ross 308 target</span></div></div>`; }
+  if(wt.length){ const twt=tgt(ROSS308_WT); html+=`<div class="chart-card"><h3>⚖️ Average weight (g)</h3><p class="sub">Growth curve vs the Ross 308 target (dashed).</p>${lineChart([{points:wt,color:'#1f6f43',fill:true},{points:twt,color:'#8a978e',dash:true}],{w:W,h:200,yMin:0})}<div class="legend"><span><i style="background:#1f6f43"></i>Actual</span><span><i style="background:#8a978e"></i>Ross 308 target</span></div></div>`; }
+  if(tmax.length) html+=`<div class="chart-card"><h3>🌡️ Temperature (°C)</h3><p class="sub">Daily max and min.</p>${lineChart([{points:tmax,color:'#e07b1a'},{points:tmin,color:'#2a7de1'}],{w:W,h:190})}<div class="legend"><span><i style="background:#e07b1a"></i>Max</span><span><i style="background:#2a7de1"></i>Min</span></div></div>`;
+  wrap.innerHTML=html;
+}
+
+/* ---------------- Avara sheet (on-screen chart) ---------------- */
+function sheetWeekRow(wkIdx,wk){ return `<tr class="wk"><td class="s1"></td><td class="s2">Wk ${wkIdx+1}</td><td>${wk.dead}</td><td>${wk.culls}</td><td colspan="19"></td></tr>`; }
+function buildSheetRows(h){
+  const dset=days(); const allDates=new Set(dset.map(e=>e.date)); walks().forEach(w=>allDates.add(w.date)); const dates=[...allDates].sort();
+  let cum=0,cumT=0,wk={dead:0,culls:0},lastWeek=null; const out=[]; const yn=v=>v?'✓':'';
+  dates.forEach(date=>{ const e=dset.find(x=>x.date===date)||{}; const t=dayTotals(date); cum+=t.dep; cumT+=e.thin||0;
+    const day=cropDay(h.placed,date); const wkIdx=(day!=null)?Math.floor((day-1)/7):null;
+    if(lastWeek!==null && wkIdx!==lastWeek){ out.push(sheetWeekRow(lastWeek,wk)); wk={dead:0,culls:0}; }
+    lastWeek=wkIdx; wk.dead+=t.dead; wk.culls+=t.culls;
+    const rem=h.birds?h.birds-cum-cumT:''; const wuse=e.waterAdj!=null?e.waterAdj:e.waterL; const per1000=(wuse!=null&&rem)?(wuse/(rem/1000)).toFixed(1):'';
+    const dmrN=h.birds?t.dep/h.birds*100:null; const dmr=dmrN!=null?dmrN.toFixed(2):''; const cdmr=h.birds?(cum/h.birds*100).toFixed(2):'';
+    const chk=yn(e.alarm)+(yn(e.generator)?' G':'')+(yn(e.fireext)?' F':'')+(yn(e.footdip)?' D':'');
+    out.push(`<tr><td class="s1">${day??''}</td><td class="s2">${date.slice(8)}/${date.slice(5,7)}</td><td>${t.dead}</td><td>${t.culls}</td><td>${t.leg||0}/${t.small||0}/${t.disease||0}</td><td>${cum}</td><td class="${dmrN!=null&&dmrN>=1?'hot':''}">${dmr}</td><td>${cdmr}</td><td>${e.thin??''}</td><td>${rem}</td><td>${e.weight??''}</td><td>${e.meter??''}</td><td>${wuse!=null?Math.round(wuse):''}</td><td>${per1000}</td><td>${e.feed??''}</td><td>${e.feedtype?escapeHtml(e.feedtype.slice(0,4)):''}</td><td>${e.tmax??''}/${e.tmin??''}</td><td>${e.hmax??''}/${e.hmin??''}</td><td>${e.co2??''}</td><td>${e.nh3??''}</td><td>${e.litter??''}</td><td>${walksOn(date).length||''}</td><td>${chk}</td></tr>`);
+  });
+  if(lastWeek!==null) out.push(sheetWeekRow(lastWeek,wk));
+  return {rows:out.join(''),n:dates.length};
+}
+let sheetZoomF=1;
+function renderSheet(){
+  const h=curHouse(); const area=document.getElementById('sheetArea'); const empty=document.getElementById('sheetEmpty');
+  if(!h){ empty.style.display='block'; empty.querySelector('p').textContent='Add a house first.'; area.innerHTML=''; return; }
+  const html=buildAvaraChart();
+  if(!html){ empty.style.display='block'; empty.querySelector('p').textContent='No data yet — record a few days and the chart appears here.'; area.innerHTML=''; return; }
+  empty.style.display='none';
+  area.innerHTML=`
+    <div class="sheettools">
+      <span class="muted-sm">Avara daily chart · tap <b>A+</b> to enlarge · scroll to see every column</span>
+      <span class="zoomgrp">
+        <button class="btn ghost tiny" onclick="sheetZoom(-1)">A−</button>
+        <span id="sheetZoomLbl">100%</span>
+        <button class="btn ghost tiny" onclick="sheetZoom(1)">A+</button>
+        <button class="btn primary tiny" onclick="printChart()">🖨️ Print / PDF</button>
+      </span>
+    </div>
+    <div class="sheetscroll"><div id="sheetChart" class="avachart">${html}</div></div>`;
+  applySheetZoom();
+}
+function sheetZoom(d){ sheetZoomF=Math.min(2.4,Math.max(0.6,Math.round((sheetZoomF+d*0.2)*10)/10)); applySheetZoom(); }
+function applySheetZoom(){ const c=document.getElementById('sheetChart'); if(!c)return; c.style.zoom=sheetZoomF;
+  const l=document.getElementById('sheetZoomLbl'); if(l)l.textContent=Math.round(sheetZoomF*100)+'%'; }
+
+/* ---------------- Houses ---------------- */
+function renderHouses(){
+  renderAccess();
+  setv('s_farm',DB.farm.name); setv('s_keeper',DB.farm.keeper); setv('s_integrator',DB.farm.integrator); setv('s_opinit',DB.farm.opinit||'Andrew=AT, Lawson=LT, Jack=JS');
+  const list=document.getElementById('houseList');
+  if(!DB.houses.length){ list.innerHTML='<p class="muted-sm">No houses yet.</p>'; return; }
+  list.innerHTML=DB.houses.map(h=>{ const n=(DB.days[h.id]||[]).length; const day=cropDay(h.placed,today());
+    return `<div class="chk" style="justify-content:space-between;cursor:pointer" onclick="editHouse('${h.id}')"><span><b>${escapeHtml(h.name)}</b> <span class="muted-sm">· ${h.birds?fmt(h.birds)+' birds':'no count'} · ${day!=null?'day '+day:'no date'} · ${n} rec</span></span><span class="pill">edit</span></div>`; }).join('');
+}
+const HOUSE_FIELDS=['name','placed','birds','breed','area','tweight','tday','cycle','rt','placeno','littertype','watermode','startmeter','ph2','ph1','ph0','lux','enrichbales','dnno','dndate','dnhatch','dnvacc','dntimes'];
+const HOUSE_CHECKS=['predeliv','calT','calH','calW','luxok'];
+function houseDensity(){ const b=num('h_birds'),a=num('h_area'); const box=document.getElementById('h_density');
+  if(b&&a){ box.style.display='block'; box.innerHTML=`<div class="row"><span>Placement density</span><b>${fmt(b/a,2)} birds/m²</b></div>`; } else { box.style.display='none'; box.innerHTML=''; } }
+
+/* ---- Flock batches (multi-flock placement, from the delivery note) ---- */
+let BATCHES=[];
+function renderBatchRows(){ const list=document.getElementById('batchList'); if(!list)return;
+  list.innerHTML=BATCHES.map((b,i)=>`
+  <div class="batchrow" style="border:1px dashed #c3d2c6;border-radius:10px;padding:10px 10px 2px;margin:0 0 10px">
+    <div class="grid2">
+      <div class="fld"><label>Flock no</label><input type="text" class="b_flock" value="${escapeHtml(b.flock||'')}" placeholder="e.g. L0405-R0403ROJUN25"></div>
+      <div class="fld"><label>Breed</label><input type="text" class="b_breed" value="${escapeHtml(b.breed||'')}" placeholder="RS308"></div>
+    </div>
+    <div class="grid3">
+      <div class="fld"><label>Age wks</label><input type="number" inputmode="numeric" class="b_age" value="${b.age!=null?b.age:''}"></div>
+      <div class="fld"><label>Birds</label><input type="number" inputmode="numeric" class="b_birds" value="${b.birds!=null?b.birds:''}" oninput="batchSumCalc()"></div>
+      <div class="fld"><label>Boxes</label><input type="number" inputmode="numeric" class="b_boxes" value="${b.boxes!=null?b.boxes:''}"></div>
+    </div>
+    <div class="grid2">
+      <div class="fld"><label>Date (only if staggered)</label><input type="date" class="b_date" value="${b.date||''}"></div>
+      <div class="fld"><label>&nbsp;</label><button type="button" class="btn sec" onclick="removeBatch(${i})">✕ Remove line</button></div>
+    </div>
+  </div>`).join('');
+  batchSumCalc(); }
+function addBatch(){ readBatchRows(); BATCHES.push({flock:'',breed:BATCHES.length?(BATCHES[BATCHES.length-1].breed||''):'RS308',age:null,birds:null,boxes:null,date:''}); renderBatchRows(); }
+function removeBatch(i){ readBatchRows(); BATCHES.splice(i,1); renderBatchRows(); }
+function readBatchRows(){ const rows=document.querySelectorAll('#batchList .batchrow'); const nn=v=>{const n=parseFloat(v);return isNaN(n)?null:n;};
+  rows.forEach((row,i)=>{ const g=c=>row.querySelector('.'+c);
+    BATCHES[i]={flock:g('b_flock').value.trim(),breed:g('b_breed').value.trim(),age:nn(g('b_age').value),birds:nn(g('b_birds').value),boxes:nn(g('b_boxes').value),date:g('b_date').value}; }); }
+function batchSumCalc(){ readBatchRows(); const box=document.getElementById('batchSumBox'); if(!box)return;
+  if(!BATCHES.length){ box.style.display='none'; box.innerHTML=''; return; }
+  const tot=BATCHES.reduce((s,b)=>s+(b.birds||0),0); const bx=BATCHES.reduce((s,b)=>s+(b.boxes||0),0);
+  box.style.display='block'; box.innerHTML=`<div class="row big"><span>Total from flock lines → Birds placed</span><b>${fmt(tot)}</b></div>${bx?`<div class="row"><span>Total boxes</span><b>${fmt(bx)}</b></div>`:''}`;
+  if(tot>0){ setv('h_birds',tot); houseDensity(); } }
+function newHouse(){ if(!requireAdmin('Only admin can set up houses'))return; editingHouse=null; document.getElementById('houseFormTitle').textContent='New house';
+  HOUSE_FIELDS.forEach(k=>setv('h_'+k,'')); setv('h_placed',today()); setv('h_littertype','Shavings'); setv('h_watermode','meter');
+  BATCHES=[]; renderBatchRows();
+  HOUSE_CHECKS.forEach(k=>{const el=document.getElementById('h_'+k); if(el)el.checked=false;});
+  document.querySelectorAll('#houseFormCard .chk').forEach(l=>l.classList.remove('on')); houseDensity();
+  document.getElementById('houseDelBtn').style.display='none'; document.getElementById('houseFormCard').style.display='block';
+  document.getElementById('houseFormCard').scrollIntoView({behavior:'smooth'}); }
+function editHouse(id){ if(!requireAdmin('Only admin can edit house setup'))return; const h=DB.houses.find(x=>x.id===id); if(!h)return; editingHouse=id;
+  document.getElementById('houseFormTitle').textContent=h.name;
+  HOUSE_FIELDS.forEach(k=>setv('h_'+k,h[k]));
+  BATCHES=(h.batches||[]).map(b=>Object.assign({},b)); renderBatchRows();
+  HOUSE_CHECKS.forEach(k=>{const el=document.getElementById('h_'+k); if(el)el.checked=!!h[k];});
+  document.querySelectorAll('#houseFormCard .chk').forEach(l=>l.classList.toggle('on',l.querySelector('input').checked)); houseDensity();
+  document.getElementById('houseDelBtn').style.display='block'; document.getElementById('houseFormCard').style.display='block';
+  document.getElementById('houseFormCard').scrollIntoView({behavior:'smooth'}); }
+function cancelHouse(){ document.getElementById('houseFormCard').style.display='none'; }
+function saveHouse(){ if(!requireAdmin('Only admin can save house setup'))return; const name=val('h_name').trim(); if(!name){toast('Give the house a name');return;}
+  const ck=id=>{const el=document.getElementById(id);return el?el.checked:false;};
+  const data={name,placed:val('h_placed'),birds:num('h_birds'),breed:val('h_breed'),area:num('h_area'),tweight:num('h_tweight'),tday:num('h_tday'),
+    cycle:val('h_cycle'),rt:val('h_rt'),placeno:val('h_placeno'),littertype:val('h_littertype'),watermode:val('h_watermode')||'meter',
+    predeliv:ck('h_predeliv'),startmeter:num('h_startmeter'),calT:ck('h_calT'),calH:ck('h_calH'),calW:ck('h_calW'),luxok:ck('h_luxok'),
+    ph2:num('h_ph2'),ph1:num('h_ph1'),ph0:num('h_ph0'),lux:num('h_lux'),enrichbales:num('h_enrichbales'),
+    dnno:val('h_dnno'),dndate:val('h_dndate'),dnhatch:val('h_dnhatch'),dnvacc:val('h_dnvacc'),dntimes:val('h_dntimes')};
+  readBatchRows(); const bts=BATCHES.filter(b=>(b.flock&&b.flock.length)||b.birds); data.batches=bts;
+  const btot=bts.reduce((s,b)=>s+(b.birds||0),0);
+  if(bts.length){ const fc=bts.map(b=>b.flock).filter(Boolean).join(' + '); if(fc)data.flockcode=fc; const a0=bts.find(b=>b.age!=null); if(a0)data.flockage=a0.age; }
+  if(btot>0){ data.birds=btot; }
+  if(editingHouse){ Object.assign(DB.houses.find(x=>x.id===editingHouse),data); }
+  else { const id=uid('h'); DB.houses.push(Object.assign({id},data)); if(!DB.current)DB.current=id; DB.days[id]=DB.days[id]||[]; DB.walks[id]=DB.walks[id]||[]; DB.meds[id]=DB.meds[id]||[]; }
+  logAction('save house',name); save(); document.getElementById('houseFormCard').style.display='none'; renderHouses(); renderHeader(); loadEntryForDate(today()); toast('✓ House saved'); }
+function deleteHouse(){ if(!requireAdmin('Only admin can delete a house'))return; if(!editingHouse)return; const h=DB.houses.find(x=>x.id===editingHouse);
+  if(!confirm('Delete '+h.name+' and all its records? This cannot be undone.'))return;
+  logAction('delete house',h.name);
+  DB.houses=DB.houses.filter(x=>x.id!==editingHouse); delete DB.days[editingHouse]; delete DB.walks[editingHouse]; delete DB.meds[editingHouse];
+  if(DB.current===editingHouse) DB.current=DB.houses.length?DB.houses[0].id:null;
+  save(); document.getElementById('houseFormCard').style.display='none'; renderHouses(); renderHeader(); loadEntryForDate(today()); toast('House deleted'); }
+function saveFarm(){ if(!requireAdmin('Only admin can edit farm details'))return; DB.farm={name:val('s_farm'),keeper:val('s_keeper'),integrator:val('s_integrator'),opinit:val('s_opinit')}; logAction('save farm',DB.farm.name); save(); renderHeader(); toast('✓ Farm details saved'); }
+
+/* ---------------- Export ---------------- */
+function csvEsc(v){ if(v==null)return ''; v=String(v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
+function download(name,content,type){ const b=new Blob([content],{type}); const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u; a.download=name; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(u); }
+function fname(suffix){ return (DB.farm.name||'broiler').replace(/\s+/g,'-')+'_'+(curHouse()?curHouse().name.replace(/\s+/g,'-'):'')+'_'+suffix+'_'+today(); }
+
+function exportCSV(){ const h=curHouse(); if(!h){toast('Add a house first');return;}
+  const dset=days(); const allDates=new Set(dset.map(e=>e.date)); walks().forEach(w=>allDates.add(w.date)); if(h.placed)allDates.add(h.placed); const dates=[...allDates].sort();
+  if(!dates.length){toast('Nothing to export yet');return;}
+  const cols=['Date','Crop day','Dead','Leg','Small','Disease','Other culls','Total culls','Daily depletion','Cum dead','Cum culls','Thinned','Thin type','Birds remaining','DMR % (daily)','CDMR % (cum)','Avg weight g','Water meter','Read time','Interval h','Water raw L','Water 24h-adj L','Water L/1000 (24h)','Feed kg','Wheat kg','Feed phase','Water:ration (24h)','Temp max','Temp min','Hum max','Hum min','CO2','Ammonia','Dark hrs','Top-up bales','Windows open','Litter score','Litter comment','Alarm','Dial-out','Generator','Fire ext','Foot dip','Walks','Notes'];
+  let cum=0,cumD=0,cumC=0,cumT=0; const lines=[cols.join(',')];
+  dates.forEach(date=>{ const e=dset.find(x=>x.date===date)||{}; const t=dayTotals(date); cum+=t.dep; cumD+=t.dead; cumC+=t.culls; cumT+=e.thin||0;
+    const rem=h.birds?h.birds-cum-cumT:''; const wuse=e.waterAdj!=null?e.waterAdj:e.waterL; const per1000=(wuse!=null&&rem)?(wuse/(rem/1000)).toFixed(1):''; const totfeed=(e.feed||0)+(e.wheat||0); const wf=(wuse!=null&&totfeed>0)?(wuse/totfeed).toFixed(2):'';
+    const yn=v=>v?'Y':'';
+    const r=[date,cropDay(h.placed,date),t.dead,t.leg,t.small,t.disease,t.other,t.culls,t.dep,cumD,cumC,e.thin,e.thintype,rem,h.birds?(t.dep/h.birds*100).toFixed(3):'',h.birds?(cum/h.birds*100).toFixed(3):'',e.weight,e.meter,e.mtime,e.intervalH!=null?e.intervalH.toFixed(1):'',e.waterL,e.waterAdj!=null?Math.round(e.waterAdj):'',per1000,e.feed,e.wheat,e.feedtype,wf,e.tmax,e.tmin,e.hmax,e.hmin,e.co2,e.nh3,e.dark,(balesOn(date)+(e.bales||0))||'',e.windows,e.litter,e.littercmt,yn(e.alarm),yn(e.dialout),yn(e.generator),yn(e.fireext),yn(e.footdip),walksOn(date).length,e.notes];
+    lines.push(r.map(csvEsc).join(',')); });
+  download(fname('daily')+'.csv',lines.join('\n'),'text/csv'); toast('✓ Daily chart downloaded'); }
+
+function exportWalksCSV(){ const h=curHouse(); if(!h){toast('Add a house first');return;} const ws=walks().sort((a,b)=>(a.date+a.time)<(b.date+b.time)?-1:1);
+  if(!ws.length){toast('No walks logged yet');return;}
+  const lines=['Date,Crop day,Time,Operator,Dead,Leg,Small,Disease,Other,Note'];
+  ws.forEach(w=>lines.push([w.date,cropDay(h.placed,w.date),w.time,w.op,w.dead,w.leg,w.small,w.disease,w.other,w.note].map(csvEsc).join(',')));
+  download(fname('walks')+'.csv',lines.join('\n'),'text/csv'); toast('✓ Walks log downloaded'); }
+
+function exportMedsCSV(){ const h=curHouse(); if(!h){toast('Add a house first');return;} const ms=medList();
+  if(!ms.length){toast('No medicines logged yet');return;}
+  const lines=['Type,Product,Batch,Expiry,Date started,Date ended,Dose,Route,Withdrawal days,Earliest slaughter,Birds/houses,Administered by,Vet,Rx ref,Reason'];
+  ms.forEach(m=>{ const clear=(m.end&&m.wd!=null)?addDays(m.end,m.wd):''; lines.push([m.type,m.product,m.batch,m.expiry,m.start,m.end,m.dose,m.route,m.wd,clear,m.birds,m.admin,m.vet,m.rx,m.reason].map(csvEsc).join(',')); });
+  download(fname('medicines')+'.csv',lines.join('\n'),'text/csv'); toast('✓ Medicines log downloaded'); }
+
+function backupJSON(){ download('broiler-chart-backup-'+today()+'.json',JSON.stringify(DB,null,2),'application/json'); toast('✓ Backup downloaded'); }
+function restoreJSON(ev){ if(!requireAdmin('Only admin can restore / merge data')){ev.target.value='';return;} const f=ev.target.files[0]; if(!f)return; const r=new FileReader();
+  r.onload=()=>{ try{ const d=JSON.parse(r.result); if(!d.houses)throw 0;
+      const mode=confirm('OK = MERGE this backup into your current data (combines walks from another phone).\nCancel = REPLACE everything with the backup.');
+      if(mode){ mergeDB(d); toast('✓ Merged'); } else { DB=d; toast('✓ Restored'); }
+      if(!DB.current&&DB.houses.length)DB.current=DB.houses[0].id; save(); renderHeader(); loadEntryForDate(today());
+    }catch(e){ toast('Invalid backup file'); } };
+  r.readAsText(f); ev.target.value=''; }
+function mergeDB(d){ DB.farm=DB.farm.name?DB.farm:(d.farm||DB.farm);
+  (d.houses||[]).forEach(h=>{ let mine=DB.houses.find(x=>x.id===h.id)||DB.houses.find(x=>x.name===h.name);
+    if(!mine){ DB.houses.push(h); mine=h; DB.days[h.id]=DB.days[h.id]||[]; DB.walks[h.id]=DB.walks[h.id]||[]; DB.meds[h.id]=DB.meds[h.id]||[]; }
+    const tid=mine.id, sid=h.id;
+    const wseen=new Set((DB.walks[tid]||[]).map(w=>w.id)); DB.walks[tid]=DB.walks[tid]||[];
+    (d.walks?.[sid]||[]).forEach(w=>{ if(!wseen.has(w.id)){ DB.walks[tid].push(w); wseen.add(w.id);} });
+    const mseen=new Set((DB.meds[tid]||[]).map(m=>m.id)); DB.meds[tid]=DB.meds[tid]||[];
+    (d.meds?.[sid]||[]).forEach(m=>{ if(!mseen.has(m.id)){ DB.meds[tid].push(m);} });
+    const dseen=new Set((DB.days[tid]||[]).map(e=>e.date)); DB.days[tid]=DB.days[tid]||[];
+    (d.days?.[sid]||[]).forEach(e=>{ if(!dseen.has(e.date)) DB.days[tid].push(e); });
+    DB.current=DB.current||tid; recomputeWaterFor(tid);
+  });
+}
+function recomputeWaterFor(id){ recomputeWaterArr(DB.days[id]||[]); }
+
+function buildAvaraChart(){ const h=curHouse(); if(!h)return null;
+  const dset=days(); const allDates=new Set(dset.map(e=>e.date)); walks().forEach(w=>allDates.add(w.date)); if(h.placed)allDates.add(h.placed); const dates=[...allDates].sort();
+  if(!dates.length)return null;
+  const esc=escapeHtml; const v0=x=>(x===null||x===undefined||x==='')?'':x;
+  const opMap={andrew:'AT',lawson:'LT',jack:'JS'}; (DB.farm&&DB.farm.opinit||'').split(',').forEach(pr=>{ const i=pr.indexOf('='); if(i>0){ const n=pr.slice(0,i).trim().toLowerCase(), v=pr.slice(i+1).trim().toUpperCase(); if(n&&v) opMap[n]=v; } });
+  const ini=op=>{ if(!op)return ''; const k=op.trim().toLowerCase(); if(opMap[k])return opMap[k]; const p=op.trim().split(/\s+/); return (p.length>1?p.map(s=>s[0]).join(''):op.slice(0,3)).toUpperCase(); };
+  const wkNoOf=date=>{ const day=cropDay(h.placed,date); return (day!=null)?Math.floor(((day>0?day:1)-1)/7)+1:1; };
+  /* ---- numeric daily grid (Avara column order) ---- */
+  let cum=0,cumT=0,lastWk=null,wk={dead:0,culls:0,leg:0,small:0,disease:0}; const num=[]; const wkChk={};
+  const wkTot=(n,w)=>`<tr style="font-weight:700;background:#e8e8e8"><td colspan="2">Wk ${n} tot</td><td>${w.dead}</td><td>${w.culls}</td><td>${w.dead+w.culls}</td><td></td><td></td><td>${w.leg}</td><td>${w.small}</td><td>${w.disease}</td><td colspan="23"></td></tr>`;
+  dates.forEach(date=>{ const e=dset.find(x=>x.date===date)||{}; const t=dayTotals(date); cum+=t.dep; cumT+=e.thin||0;
+    const day=cropDay(h.placed,date); const wn=wkNoOf(date);
+    if(lastWk!==null && wn!==lastWk){ num.push(wkTot(lastWk,wk)); wk={dead:0,culls:0,leg:0,small:0,disease:0}; }
+    lastWk=wn; wk.dead+=t.dead; wk.culls+=t.culls; wk.leg+=t.leg; wk.small+=t.small; wk.disease+=t.disease;
+    const c=wkChk[wn]||(wkChk[wn]={fire:0,gen:0,foot:0,dial:0,alarm:0}); if(e.fireext)c.fire++; if(e.generator)c.gen++; if(e.footdip)c.foot++; if(e.dialout)c.dial++; if(e.alarm)c.alarm++;
+    const rem=h.birds?h.birds-cum-cumT:''; const wuse=e.waterAdj!=null?e.waterAdj:e.waterL;
+    const dmr=h.birds?(t.dep/h.birds*100).toFixed(2):''; const cdmr=h.birds?(cum/h.birds*100).toFixed(2):'';
+    const ws=walksOn(date); const req=(day!=null&&day<=7)?3:2; const wslot=i=>{ const w=ws[i]; return `<td>${w?(w.time||''):''}</td><td>${w?esc(ini(w.op)):''}</td>`; }; const wnote=ws.map(w=>w.note).filter(Boolean).map(esc).join('; '); const dTint=(ws.length<req)?' style="background:#ffe0e0;font-weight:700"':'';
+    num.push(`<tr><td${dTint}>${day??''}</td><td>${date.slice(8)}/${date.slice(5,7)}</td><td>${t.dead}</td><td>${t.culls}</td><td>${t.dep}</td><td>${cum}</td><td>${v0(e.weight)}</td><td>${t.leg||''}</td><td>${t.small||''}</td><td>${t.disease||''}</td><td>${rem}</td><td>${dmr}</td><td>${cdmr}</td><td>${v0(e.meter)}</td><td>${wuse!=null?Math.round(wuse):''}</td><td>${v0(e.hmax)}</td><td>${v0(e.hmin)}</td><td>${v0(e.tmax)}</td><td>${v0(e.tmin)}</td><td>${v0(e.co2)}</td><td>${v0(e.nh3)}</td><td>${v0(e.dark)}</td><td>${v0(e.feed)}</td><td>${v0(e.wheat)}</td><td>${e.feedtype?esc(e.feedtype.slice(0,4)):''}</td><td>${e.windows||''}</td>${wslot(0)}${wslot(1)}${wslot(2)}<td style="text-align:left">${wnote}</td></tr>`);
+  });
+  if(lastWk!==null) num.push(wkTot(lastWk,wk));
+  /* ---- daily walks: time + initials (3x days 0-7, then 2x) ---- */
+  const wrows=dates.map(date=>{ const ws=walksOn(date); const day=cropDay(h.placed,date);
+    const req=(day!=null&&day<=7)?3:2; const slot=i=>{ const w=ws[i]; return `<td>${w?(w.time||''):''}</td><td>${w?esc(ini(w.op)):''}</td>`; };
+    const ok=ws.length>=req; const note=ws.map(w=>w.note).filter(Boolean).map(esc).join('; ');
+    return `<tr><td>${day??''}</td><td>${date.slice(8)}/${date.slice(5,7)}</td>${slot(0)}${slot(1)}${slot(2)}<td style="${ok?'':'background:#ffd6d6;font-weight:700'}">${ws.length}/${req}</td><td style="text-align:left">${note}</td></tr>`;
+  }).join('');
+  /* ---- weekly check & sample box (own frequencies) ---- */
+  const maxWk=Math.max(1,...dates.map(wkNoOf));
+  const tkc=(n,req)=>{ n=n||0; req=req||1; const ok=n>=req; const txt=ok?('✓'+(n>req?' ×'+n:'')):(n>0?(n+'/'+req):'—'); return `<td style="${ok?'':'background:#ffe0e0;font-weight:700'}">${txt}</td>`; };
+  let wkBox=''; for(let i=1;i<=maxWk;i++){ const c=wkChk[i]||{}; wkBox+=`<tr><td>${i}</td>${tkc(c.fire,1)}${tkc(c.gen,1)}${tkc(c.foot,2)}${tkc(c.dial,1)}</tr>`; }
+  /* ---- litter score box (weekly: days 7/14/21/28/35) ---- */
+  let litBox=''; [7,14,21,28,35].forEach(d=>{ const dt=h.placed?addDays(h.placed,d):null; const e=dt?dset.find(x=>x.date===dt):null; litBox+=`<tr><td>${d}</td><td>${e&&e.litter!=null?e.litter:''}</td><td style="text-align:left">${e&&e.littercmt?esc(e.littercmt):''}</td></tr>`; });
+  /* ---- medicines ---- */
+  const ms=medList(); let medTbl='';
+  if(ms.length){ medTbl=`<h3>Medicines &amp; vaccines</h3><table><thead><tr><th>Type</th><th>Product</th><th>Batch</th><th>Start</th><th>End</th><th>Dose</th><th>Route</th><th>WD</th><th>Clear from</th><th>By</th><th>Vet / Rx</th></tr></thead><tbody>`+
+    ms.slice().reverse().map(m=>{ const clear=(m.end&&m.wd!=null)?addDays(m.end,m.wd):''; return `<tr><td>${m.type}</td><td>${esc(m.product||'')}</td><td>${esc(m.batch||'')}</td><td>${m.start||''}</td><td>${m.end||''}</td><td>${esc(m.dose||'')}</td><td>${m.route||''}</td><td>${m.wd??''}</td><td>${clear}</td><td>${esc(m.admin||'')}</td><td>${esc((m.vet||'')+(m.rx?' '+m.rx:''))}</td></tr>`; }).join('')+`</tbody></table>`; }
+  /* ---- notes log ---- */
+  let noteTbl=''; const nitems=notesItems();
+  if(nitems.length){ noteTbl=`<h3>Notes &amp; comments log</h3><table><thead><tr><th>Date</th><th>Day</th><th>Source</th><th style="text-align:left">Note</th></tr></thead><tbody>`+
+    nitems.map(it=>`<tr><td>${it.date.slice(8)}/${it.date.slice(5,7)}</td><td>${cropDay(h.placed,it.date)??''}</td><td>${esc(it.src)}</td><td style="text-align:left">${esc(it.txt)}</td></tr>`).join('')+`</tbody></table>`; }
+  /* ---- header values ---- */
+  const dens=(h.birds&&h.area)?fmt(h.birds/h.area,2):'—'; const yn=b=>b?'Y':'N';
+  const ph=[h.ph2,h.ph1,h.ph0].map(x=>x!=null?x:'–').join(' / ');
+  let totFeed=0,totWheat=0; dset.forEach(e=>{ totFeed+=e.feed||0; totWheat+=e.wheat||0; });
+  const enrich=(h.enrichbales!=null&&h.enrichbales!=='')?h.enrichbales:'';
+  const flockRows=(h.batches&&h.batches.length)?h.batches.map(b=>`<tr><td>${esc(b.flock||'')}</td><td>${b.age!=null?b.age:''}</td><td>${b.birds!=null?fmt(b.birds):''}</td><td>${b.boxes!=null?b.boxes:''}</td></tr>`).join(''):`<tr><td colspan="4" style="text-align:left">${esc(h.flockcode||'—')}${h.flockage!=null?' · age '+h.flockage:''}${h.placeno?' · place '+esc(h.placeno):''}</td></tr>`;
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #000;padding-bottom:4px;margin-bottom:6px">
+      <div><div style="font-size:17px;font-weight:800">avara <span style="font-weight:400;font-size:12px">daily record</span></div>
+        <div style="font-size:11px">Farm: <b>${esc(DB.farm.name||'')}</b> · RT No: <b>${esc(h.rt||'—')}</b> · Cycle: <b>${esc(h.cycle||'—')}</b> · House: <b>${esc(h.name)}</b> · Owner/Keeper: <b>${esc(DB.farm.keeper||'—')}</b></div></div>
+      <div style="font-size:10px;text-align:right">Printed: ${today()}</div></div>
+    <div style="display:flex;gap:10px;font-size:9px;margin-bottom:6px">
+      <table style="flex:1"><tbody>
+        <tr><td><b>Total placed</b></td><td>${h.birds?fmt(h.birds):'—'}</td><td><b>Floor area</b></td><td>${h.area?h.area+' m²':'—'}</td><td><b>Density</b></td><td>${dens}/m²</td></tr>
+        <tr><td><b>Floor</b></td><td>${esc(h.littertype||'—')}</td><td><b>Placed</b></td><td>${h.placed||'—'}</td><td><b>Breed</b></td><td>${esc(h.breed||'—')}</td></tr>
+        <tr><td><b>Enrichment bales</b></td><td>${enrich||'____'}</td><td><b>Lux (≥20)</b></td><td>${h.lux!=null?h.lux:'—'}</td><td><b>Pre-heat 2d/1d/day °C</b></td><td>${ph}</td></tr>
+        <tr><td><b>Calib T/H/Wt</b></td><td colspan="5">${yn(h.calT)} / ${yn(h.calH)} / ${yn(h.calW)} &nbsp;·&nbsp; Pre-delivery check: ${yn(h.predeliv)} &nbsp;·&nbsp; Start meter: ${h.startmeter!=null?h.startmeter:'—'}</td></tr>
+      </tbody></table>
+      <table style="width:40%"><thead><tr><th colspan="4">Flock details — DN ${esc(h.dnno||'—')}${h.dndate?' · '+h.dndate:''}${h.dnhatch?' · '+esc(h.dnhatch):''}</th></tr><tr><th>Flock</th><th>Age</th><th>Birds</th><th>Boxes</th></tr></thead><tbody>${flockRows}</tbody></table>
+    </div>
+    <table><thead>
+      <tr><th>Day</th><th>Date</th><th>Mort</th><th>Culls</th><th>Daily<br>tot</th><th>Cum<br>tot</th><th>Av<br>wt</th><th>Leg</th><th>Small</th><th>Dis</th><th>Birds<br>remain</th><th>DMR</th><th>CDMR</th><th>Meter</th><th>Water<br>L/1000</th><th>Hum<br>max</th><th>Hum<br>min</th><th>Temp<br>max</th><th>Temp<br>min</th><th>CO₂</th><th>NH₃</th><th>Dark<br>hrs</th><th>Feed<br>kg</th><th>Wheat<br>kg</th><th>Type</th><th>Win<br>open</th><th>Walk 1</th><th>In</th><th>Walk 2</th><th>In</th><th>Walk 3</th><th>In</th><th style="text-align:left">Comments</th></tr>
+    </thead><tbody>${num.join('')}</tbody></table>
+    <div style="font-size:8px;margin:2px 0 6px">Walks shown on the right of each day row (Avara layout): up to 3 inspections — time + initials. Day cell tinted where below the required number (3×/day to day 7, then 2×/day).</div>
+    <div style="display:flex;gap:12px;margin-top:6px;align-items:flex-start">
+      <div style="flex:1"><h3 style="margin:4px 0">Check &amp; sample requirements</h3>
+        <table><thead><tr><th>Week</th><th>Fire ext<br>(weekly)</th><th>Generator<br>(7-daily)</th><th>Foot dip<br>(twice wk)</th><th>Dial-out<br>(weekly)</th></tr></thead><tbody>${wkBox}</tbody></table></div>
+      <div style="width:42%"><h3 style="margin:4px 0">Litter score (1 dry – 4 wet)</h3>
+        <table><thead><tr><th>Day</th><th>Score</th><th style="text-align:left">Comments</th></tr></thead><tbody>${litBox}</tbody></table></div>
+    </div>
+    <div style="margin-top:6px"><h3 style="margin:4px 0">Feed &amp; wheat — crop to date</h3>
+      <table><thead><tr><th>Compound feed (kg)</th><th>Whole wheat (kg)</th><th>Total ration (kg)</th></tr></thead><tbody><tr><td>${fmt(totFeed)}</td><td>${fmt(totWheat)}</td><td><b>${fmt(totFeed+totWheat)}</b></td></tr></tbody></table></div>
+    ${medTbl}
+    ${noteTbl}
+    <div class="pfoot"><span>Welfare of Meat Chickens Regs / Red Tractor / Avara daily record · water normalised to rolling 24 h · ✓ = required frequency met</span><span>${esc(DB.farm.name||'Rhydimoor Farms Ltd')}</span></div>`;
+}
+
+function printChart(){ if(!curHouse()){toast('Add a house first');return;}
+  const html=buildAvaraChart(); if(!html){toast('Nothing to print yet');return;}
+  document.getElementById('printArea').innerHTML=html;
+  setTimeout(()=>window.print(),150);
+}
+
+/* ---------------- Init ---------------- */
+function init(){ load();
+  document.querySelectorAll('.chk').forEach(l=>{ const cb=l.querySelector('input'); cb.addEventListener('change',()=>l.classList.toggle('on',cb.checked)); });
+  updateLockUI(); renderHeader(); if(curHouse()) loadEntryForDate(today());
+}
+/* ===== Cloud auth gate + sync — Live cloud build v2 (2026-07-14) =====
+   Ported onto the CURRENT app (all July features). Increment 1 (login gate)
+   + Increment 2 (pull on load). Offline-first: renders from the local cache,
+   then refreshes from Supabase; if offline the cache stands. Push-on-save is
+   Increment 3 (next). New fields mapped: daily wheat, walk bales,
+   placement enrichbales, farm opinit. */
+(function(){
+  const SUPABASE_URL='https://gkjhzsygtndvlwbzoesn.supabase.co';
+  const SUPABASE_KEY='sb_publishable_9Vlqr8aRtf3RgtyMemdwew_aBJBiaTq'; // publishable — safe in the browser; RLS protects the data
+  let sb=null, started=false, _farms=[], _suspendPush=false;
+
+  function _dbg(m){ /* diagnostics disabled — kept as a no-op so call sites stay harmless */ }
+  async function startApp(){ if(started) return; started=true;
+    _dbg('startApp · online='+(navigator&&navigator.onLine)+' · sb='+!!sb);
+    try{ init(); }catch(e){ _dbg('init threw: '+(e&&e.message||e)); console.error(e); }
+    try{ if(sb) await cloudPull(); }
+    catch(e){ _dbg('PULL THREW: '+(e&&e.message||e)); console.warn('Cloud pull failed — keeping local cache', e);
+      if(typeof toast==='function') toast('Offline — showing saved data'); }
+    finally{ _suspendPush=false; _dbg('startApp finished (tap this box to hide)'); }
+  }
+
+  function cnum(v){ return (v===null||v===undefined||v==='')?null:(isNaN(Number(v))?null:Number(v)); }
+  async function cloudPull(){
+    // NB: deliberately NOT bailing on navigator.onLine===false — iOS can falsely report
+    // "offline" for a moment and that was skipping the pull entirely, leaving phones on the
+    // empty "set up a house" screen. If we're truly offline the fetch below just throws and
+    // the caller keeps the local cache.
+    try{ await flushQueue(); }catch(e){ console.warn('pre-pull flush failed',e); } // land local edits before overwriting DB
+
+    // Fetch the farm(s) this login may see. On mobile the Supabase auth token can lag the
+    // very first query (a race after sign-in / session-restore), so the request goes out
+    // unauthenticated and RLS returns an EMPTY set even though the user has access — which is
+    // exactly what dropped phones onto the empty screen while PCs worked. So: if we get
+    // nothing back, re-apply the session and retry a few times before believing it.
+    let farms=null, fe=null;
+    for(let attempt=0; attempt<6; attempt++){
+      var _ss=null; try{ _ss=await sb.auth.getSession(); }catch(e){}
+      _dbg('attempt '+attempt+' · session='+!!(_ss&&_ss.data&&_ss.data.session)+' · user='+((_ss&&_ss.data&&_ss.data.session&&_ss.data.session.user&&_ss.data.session.user.email)||'-'));
+      const r=await sb.from('farms').select('*').eq('deleted',false);
+      fe=r.error; farms=r.data;
+      _dbg('  farms='+(farms?farms.length:'null')+' err='+(fe?(fe.message||fe.code||'y'):'-'));
+      if(fe) throw fe;
+      if(farms && farms.length) break;                       // got the farm(s) — proceed
+      await new Promise(res=>setTimeout(res, 300*(attempt+1))); // token still attaching — wait & retry
+    }
+    if(!farms || !farms.length){ _dbg('GIVING UP — no farms visible for this login'); console.warn('cloudPull: no farms visible for this user'); return; }
+    _farms=farms.slice();   // remember which sites this login may see (for the farm switcher)
+
+    let farmId = (DB && DB.cloudFarmId) || null;
+    if(!farmId || !farms.some(f=>f.id===farmId)){
+      const byName = (DB&&DB.farm&&DB.farm.name) ? farms.find(f=>f.name===DB.farm.name) : null;
+      farms.sort((a,b)=>a.id<b.id?-1:1);
+      farmId = byName ? byName.id : farms[0].id;
+    }
+    const farm = farms.find(f=>f.id===farmId);
+
+    const {data:houses,error:he}=await sb.from('houses').select('*').eq('farm_id',farmId).eq('deleted',false);
+    _dbg('houses='+((houses||[]).length)+' for '+farmId+(he?(' herr='+he.message):''));
+    if(he) throw he;
+    const houseIds=(houses||[]).map(h=>h.id);
+
+    let placements=[];
+    if(houseIds.length){
+      const {data,error}=await sb.from('placements').select('*').in('house_id',houseIds).eq('deleted',false);
+      if(error) throw error; placements=data||[];
+    }
+    const curByHouse={};
+    for(const p of placements){ const cur=curByHouse[p.house_id];
+      const newer = !cur
+        || (p.placed_date||'') > (cur.placed_date||'')
+        || ((p.placed_date||'')===(cur.placed_date||'') && (p.created_at||'') > (cur.created_at||''));
+      if(newer) curByHouse[p.house_id]=p;
+    }
+    const houseOfPlacement={}; placements.forEach(p=>houseOfPlacement[p.id]=p.house_id);
+    const curPlacementIds=Object.values(curByHouse).map(p=>p.id);
+
+    const fetchKids=async(table)=>{ if(!curPlacementIds.length) return [];
+      const {data,error}=await sb.from(table).select('*').in('placement_id',curPlacementIds).eq('deleted',false);
+      if(error) throw error; return data||[]; };
+    const [batches,daily,walkRows,medRows]=await Promise.all([
+      fetchKids('placement_batches'), fetchKids('daily_records'),
+      fetchKids('walks'), fetchKids('meds') ]);
+
+    const newDB={
+      farm:{name:farm.name||'', keeper:farm.keeper||'', integrator:farm.integrator||'Avara', opinit:farm.opinit||''},
+      houses:[], days:{}, walks:{}, meds:{},
+      auth:(DB&&DB.auth)||{pin:null}, log:(DB&&DB.log)||[],
+      current:null, cloudFarmId:farmId
+    };
+    const houseById={};
+    for(const h of (houses||[])){
+      const p=curByHouse[h.id]||{};
+      const ho={
+        id:h.id, name:h.name, area:cnum(h.area), breed:(p.breed||h.breed||''),
+        placed:p.placed_date||'', birds:cnum(p.birds),
+        tweight:cnum(p.target_weight), tday:cnum(p.target_day),
+        cycle:p.cycle||'', rt:p.rt||'', placeno:p.placeno||'', littertype:p.littertype||'',
+        watermode:p.watermode||'meter', startmeter:cnum(p.startmeter),
+        ph2:cnum(p.preheat_2d), ph1:cnum(p.preheat_1d), ph0:cnum(p.preheat_0d), lux:cnum(p.lux),
+        enrichbales:cnum(p.enrichbales),
+        dnno:p.dn_no||'', dndate:p.dn_date||'', dnhatch:p.dn_hatch||'',
+        dnvacc:p.dn_vacc||'', dntimes:p.dn_times||'',
+        flockcode:p.flockcode||'', flockage:cnum(p.flockage),
+        batches:[], _placementId:p.id||null
+      };
+      newDB.houses.push(ho); houseById[h.id]=ho;
+      newDB.days[h.id]=[]; newDB.walks[h.id]=[]; newDB.meds[h.id]=[];
+    }
+
+    for(const b of batches){ const hid=houseOfPlacement[b.placement_id]; const h=houseById[hid]; if(!h) continue;
+      h.batches.push({flock:b.flock||'', breed:b.breed||'', age:cnum(b.age),
+        birds:cnum(b.birds), boxes:cnum(b.boxes), date:b.batch_date||''}); }
+
+    for(const d of daily){ const hid=houseOfPlacement[d.placement_id]; if(!newDB.days[hid]) continue;
+      newDB.days[hid].push({ date:d.rec_date, meter:cnum(d.meter), mtime:d.read_time||'',
+        waterdaily:cnum(d.water_daily), feed:cnum(d.feed), wheat:cnum(d.wheat), feedtype:d.feed_type||'', weight:cnum(d.weight),
+        tmax:cnum(d.tmax), tmin:cnum(d.tmin), hmax:cnum(d.hmax), hmin:cnum(d.hmin),
+        co2:cnum(d.co2), nh3:cnum(d.nh3), dark:cnum(d.dark),
+        windows:d.windows||'', thin:cnum(d.thin), thintype:d.thin_type||'',
+        litter:(d.litter!=null?Number(d.litter):null), littercmt:d.litter_cmt||'',
+        alarm:!!d.alarm, dialout:!!d.dialout, generator:!!d.generator,
+        fireext:!!d.fireext, footdip:!!d.footdip, notes:d.notes||'' }); }
+
+    for(const w of walkRows){ const hid=houseOfPlacement[w.placement_id]; if(!newDB.walks[hid]) continue;
+      newDB.walks[hid].push({ id:w.id, date:w.walk_date, time:w.walk_time||'', op:w.op||'',
+        dead:Number(w.dead||0), leg:Number(w.leg||0), small:Number(w.small||0),
+        disease:Number(w.disease||0), other:Number(w.other||0), bales:Number(w.bales||0), note:w.note||'' }); }
+
+    for(const m of medRows){ const hid=houseOfPlacement[m.placement_id]; if(!newDB.meds[hid]) continue;
+      newDB.meds[hid].push({ id:m.id, type:m.med_type||'', product:m.product||'', batch:m.batch||'',
+        expiry:m.expiry||'', start:m.start_date||'', end:m.end_date||'', dose:m.dose||'', route:m.route||'',
+        wd:cnum(m.withdrawal_days), birds:(m.birds_treated!=null?String(m.birds_treated):(m.houses_treated||'')),
+        admin:m.administered_by||'', vet:m.vet||'', rx:m.rx_ref||'', reason:m.reason||'' }); }
+
+    if(typeof recomputeWaterArr==='function'){
+      Object.keys(newDB.days).forEach(hid=>recomputeWaterArr(newDB.days[hid]));
+    }
+
+    const prev = DB && DB.current;
+    newDB.current = (prev && houseById[prev]) ? prev : (newDB.houses[0] ? newDB.houses[0].id : null);
+
+    _dbg('COMMIT farm='+((newDB.farm&&newDB.farm.name)||'-')+' houses='+newDB.houses.length+' current='+newDB.current);
+    _suspendPush=true;   // committing freshly-pulled rows — do NOT re-enqueue them for push
+    DB = newDB;
+    if(typeof save==='function') save();
+    if(typeof renderHeader==='function') renderHeader();
+    if(newDB.current && typeof loadEntryForDate==='function'){
+      loadEntryForDate(typeof today==='function'?today():new Date().toISOString().slice(0,10));
+    }
+    if(typeof refreshActiveView==='function') refreshActiveView();
+    resetBaseline();   // pulled state is now the sync baseline — don't re-push it
+    renderFarmSwitcher();
+    _suspendPush=false;   // pull complete — resume normal push-on-save
+    if(typeof toast==='function') toast('✓ Synced from cloud');
+  }
+
+  // ---- Farm switcher: one login, both sites (shows only if the user can see >1 farm) ----
+  function switchFarm(id){
+    if(!id || (DB && id===DB.cloudFarmId)) return;
+    (async()=>{
+      try{ await flushQueue(); }catch(e){}            // land pending writes for the current site first
+      DB.cloudFarmId=id;                               // cloudPull persists + rebaselines; must NOT push here
+      try{ await cloudPull(); }catch(e){ if(typeof toast==='function') toast('Could not switch site — check signal'); }
+      finally{ _suspendPush=false; }
+    })();
+  }
+  function renderFarmSwitcher(){
+    if(!_farms || _farms.length<2){ const ex=document.getElementById('cloudFarmSel'); if(ex) ex.remove(); return; }
+    let sel=document.getElementById('cloudFarmSel');
+    if(!sel){ sel=document.createElement('select'); sel.id='cloudFarmSel';
+      sel.style.cssText='position:fixed;top:6px;left:8px;z-index:50;font-size:11px;border:0;border-radius:6px;padding:4px 6px;background:rgba(0,0,0,.06);color:#155232';
+      sel.onchange=()=>switchFarm(sel.value); document.body.appendChild(sel); }
+    sel.innerHTML=_farms.slice().sort((a,b)=>((a.name||a.id)<(b.name||b.id))?-1:1)
+      .map(f=>'<option value="'+f.id+'"'+(f.id===DB.cloudFarmId?' selected':'')+'>'+(f.name||f.id)+'</option>').join('');
+  }
+
+  /* ===== Increment 3: push-on-save (row-level upsert + offline queue) =====
+     Every save() diffs DB → the relational rows and queues changed rows for
+     upsert to Supabase. Deterministic ids where the app has none (daily,
+     batches). Deletes are handled explicitly for walks/meds (never diff-
+     deleted, so clearing a crop never wipes server history). Offline writes
+     queue in localStorage and flush on reconnect / next save / before a pull.
+     Row-level last-write-wins (schema v1); separate rows mean two operators'
+     walks on one crop never collide. */
+  const QKEY='broilerChartApp_v2_pushq', BKEY='broilerChartApp_v2_pushbase';
+  let _uid=null, _flushing=false, _hooksInstalled=false;
+  function loadQ(){ try{ return JSON.parse(localStorage.getItem(QKEY)||'[]'); }catch(e){ return []; } }
+  function saveQ(q){ try{ localStorage.setItem(QKEY, JSON.stringify(q)); }catch(e){} }
+  function loadBase(){ try{ return JSON.parse(localStorage.getItem(BKEY)||'{}'); }catch(e){ return {}; } }
+  function saveBase(b){ try{ localStorage.setItem(BKEY, JSON.stringify(b)); }catch(e){} }
+  const dOrNull=v=>{ const s=(v==null?'':String(v)).trim(); return s?s:null; };
+  const nOrNull=v=>(v===null||v===undefined||v==='')?null:(isNaN(Number(v))?null:Number(v));
+  function placementIdOf(h){ return h._placementId || ('p-'+h.id+'-'+(h.cycle||'x')); }
+
+  // Build the full relational row set from DB → { 'table:pk': {table,row} }
+  function buildRows(){
+    const out={};
+    if(!DB || !DB.cloudFarmId) return out;           // need the farm PK (from a pull) before we can push
+    const fid=DB.cloudFarmId;
+    out['farms:'+fid]={table:'farms', row:{ id:fid, name:(DB.farm&&DB.farm.name)||'', keeper:(DB.farm&&DB.farm.keeper)||null,
+      integrator:(DB.farm&&DB.farm.integrator)||'Avara', opinit:(DB.farm&&DB.farm.opinit)||null, deleted:false }};
+    (DB.houses||[]).forEach(h=>{
+      out['houses:'+h.id]={table:'houses', row:{ id:h.id, farm_id:fid, name:h.name||'', area:nOrNull(h.area), breed:h.breed||null, deleted:false }};
+      const pid=placementIdOf(h);
+      out['placements:'+pid]={table:'placements', row:{ id:pid, house_id:h.id, cycle:h.cycle||null, placed_date:dOrNull(h.placed), birds:nOrNull(h.birds),
+        placeno:h.placeno||null, breed:h.breed||null, flockcode:h.flockcode||null, flockage:nOrNull(h.flockage),
+        rt:h.rt||null, littertype:h.littertype||null, target_weight:nOrNull(h.tweight), target_day:nOrNull(h.tday),
+        predeliv:(h.predeliv==null?null:!!h.predeliv), startmeter:nOrNull(h.startmeter),
+        cal_temp:(h.calT==null?null:!!h.calT), cal_hum:(h.calH==null?null:!!h.calH), cal_weight:(h.calW==null?null:!!h.calW),
+        lux_ok:(h.luxok==null?null:!!h.luxok), preheat_2d:nOrNull(h.ph2), preheat_1d:nOrNull(h.ph1), preheat_0d:nOrNull(h.ph0),
+        lux:nOrNull(h.lux), enrichbales:nOrNull(h.enrichbales), watermode:h.watermode||'meter',
+        dn_no:h.dnno||null, dn_date:dOrNull(h.dndate), dn_hatch:h.dnhatch||null, dn_vacc:h.dnvacc||null, dn_times:h.dntimes||null, deleted:false }};
+      (h.batches||[]).forEach((b,i)=>{ const bid='b-'+pid+'-'+i;
+        out['placement_batches:'+bid]={table:'placement_batches', row:{ id:bid, placement_id:pid, flock:b.flock||null, breed:b.breed||null,
+          age:nOrNull(b.age), birds:nOrNull(b.birds), boxes:nOrNull(b.boxes), batch_date:dOrNull(b.date), deleted:false }}; });
+      (DB.days[h.id]||[]).forEach(d=>{ const did='d-'+pid+'-'+d.date;
+        out['daily_records:'+did]={table:'daily_records', row:{ id:did, placement_id:pid, rec_date:d.date, meter:nOrNull(d.meter), read_time:d.mtime||null,
+          water_daily:nOrNull(d.waterdaily), water_l:nOrNull(d.waterL), water_adj:nOrNull(d.waterAdj), interval_h:nOrNull(d.intervalH),
+          feed:nOrNull(d.feed), wheat:nOrNull(d.wheat), feed_type:d.feedtype||null, weight:nOrNull(d.weight),
+          tmax:nOrNull(d.tmax), tmin:nOrNull(d.tmin), hmax:nOrNull(d.hmax), hmin:nOrNull(d.hmin),
+          co2:nOrNull(d.co2), nh3:nOrNull(d.nh3), dark:nOrNull(d.dark), windows:d.windows||null,
+          thin:nOrNull(d.thin), thin_type:d.thintype||null, litter:nOrNull(d.litter), litter_cmt:d.littercmt||null,
+          alarm:!!d.alarm, dialout:!!d.dialout, generator:!!d.generator, fireext:!!d.fireext, footdip:!!d.footdip, notes:d.notes||null, deleted:false }}; });
+      (DB.walks[h.id]||[]).forEach(w=>{
+        out['walks:'+w.id]={table:'walks', row:{ id:w.id, placement_id:pid, walk_date:w.date, walk_time:w.time||null, op:w.op||null,
+          dead:nOrNull(w.dead)||0, leg:nOrNull(w.leg)||0, small:nOrNull(w.small)||0, disease:nOrNull(w.disease)||0,
+          other:nOrNull(w.other)||0, bales:nOrNull(w.bales), note:w.note||null, deleted:false }}; });
+      (DB.meds[h.id]||[]).forEach(m=>{ const bt=(m.birds!==''&&m.birds!=null&&!isNaN(Number(m.birds)))?Number(m.birds):null;
+        out['meds:'+m.id]={table:'meds', row:{ id:m.id, placement_id:pid, med_type:m.type||null, product:m.product||null, batch:m.batch||null,
+          expiry:dOrNull(m.expiry), start_date:dOrNull(m.start), end_date:dOrNull(m.end), dose:m.dose||null, route:m.route||null,
+          withdrawal_days:nOrNull(m.wd), birds_treated:bt, houses_treated:(bt===null?(m.birds||null):null),
+          administered_by:m.admin||null, vet:m.vet||null, rx_ref:m.rx||null, reason:m.reason||null, deleted:false }}; });
+    });
+    return out;
+  }
+  function stampUser(row){ if(_uid) row.updated_by=_uid; return row; }
+  function resetBaseline(){ const rows=buildRows(); const b={}; for(const k in rows){ b[k]=JSON.stringify(rows[k].row); } saveBase(b); }
+  function cloudPushChanged(){
+    if(_suspendPush) return;   // ignore saves triggered by a pull (they aren't user edits)
+    const rows=buildRows(); if(!rows || !Object.keys(rows).length) return;
+    const base=loadBase(); const q=loadQ(); let changed=false;
+    for(const k in rows){ const curRow=rows[k].row; const js=JSON.stringify(curRow); const prevJs=base[k];
+      if(prevJs===js) continue;                        // this row is unchanged since last sync
+      const delta={ id:curRow.id }; let partial=false;
+      if(prevJs===undefined){
+        // Brand-new row: INSERT via upsert. Send the populated fields (skip null/false blanks);
+        // parent keys like placement_id are non-null so they're included — the DB insert-check
+        // (row-level security) needs them — and two operators creating the same day still MERGE.
+        for(const col in curRow){ if(col==='id') continue; const v=curRow[col]; if(v!==null && v!==false) delta[col]=v; }
+        delta.deleted=false;                           // always set so the pull filter (deleted=false) matches
+      } else {
+        // Existing row: partial UPDATE of ONLY the columns changed on THIS device (field-level
+        // merge), never a blank over an existing value. Uses UPDATE (not upsert) so it doesn't
+        // trip the insert-check RLS that a partial upsert (missing placement_id) would fail.
+        partial=true;
+        let prev={}; try{ prev=JSON.parse(prevJs); }catch(e){}
+        for(const col in curRow){ if(col==='id') continue; const v=curRow[col];
+          if(v===null) continue;                                    // blanks never overwrite an existing value
+          if(JSON.stringify(v)!==JSON.stringify(prev[col])) delta[col]=v; }
+        if(Object.keys(delta).length<=1){ base[k]=js; continue; }   // only id present → nothing real changed
+      }
+      q.push({table:rows[k].table, partial:partial, row:stampUser(delta)}); base[k]=js; changed=true;
+    }
+    if(changed){ saveBase(base); saveQ(q); flushQueue(); }
+  }
+  function enqueueDelete(table,id){ const q=loadQ(); q.push({table, del:true, id}); saveQ(q); flushQueue(); }
+  async function flushQueue(){
+    if(_flushing || !sb) return;
+    if(typeof navigator!=='undefined' && navigator.onLine===false) return;
+    let q=loadQ(); if(!q.length) return;
+    _flushing=true;
+    try{
+      while(q.length){ const op=q[0];
+        try{
+          if(op.del){ const {error}=await sb.from(op.table).update({deleted:true}).eq('id',op.id); if(error) throw error; }
+          else if(op.partial){ const patch=Object.assign({},op.row); const rid=patch.id; delete patch.id;
+            const {error}=await sb.from(op.table).update(patch).eq('id',rid); if(error) throw error; }
+          else { const {error}=await sb.from(op.table).upsert(op.row); if(error) throw error; }
+        }catch(e){
+          const msg=((e&&(e.message||e.code))||'')+'', code=((e&&e.code)||'')+'';
+          // A PERMANENT error will never succeed on retry — e.g. an operator isn't allowed to write the
+          // farms/structure rows (row-level security). Drop that op and carry on, so it can't jam the daily
+          // saves queued behind it. TRANSIENT errors (offline/network) keep the op and retry later.
+          const permanent = /row-level security|violates|duplicate key|already exists|invalid input|does not exist|permission denied|malformed|not-null|check constraint|PGRST/i.test(msg)
+                            || /^(22|23|42)/.test(code) || code==='PGRST301';
+          if(permanent){ console.warn('flushQueue: dropping un-sendable op — '+op.table+' ('+msg+')'); q.shift(); saveQ(q); q=loadQ(); continue; }
+          console.warn('flushQueue: transient failure, will retry later',op,e); break;
+        }
+        q.shift(); saveQ(q); q=loadQ();
+      }
+    } finally { _flushing=false; }
+  }
+  function installPushHooks(){
+    if(_hooksInstalled) return; _hooksInstalled=true;
+    // One-time recovery: earlier builds could leave a failed push op stuck in the queue (a partial
+    // upsert the RLS rejected), which then blocks every later push. Bump PUSH_SCHEMA to drop the
+    // stale queue + baseline so devices heal themselves; the next pull rebuilds the baseline.
+    try{ const PUSH_SCHEMA='3'; if(localStorage.getItem(QKEY+'_v')!==PUSH_SCHEMA){ localStorage.removeItem(QKEY); localStorage.removeItem(BKEY); localStorage.setItem(QKEY+'_v',PUSH_SCHEMA); } }catch(e){}
+    const _origSave=window.save;
+    if(typeof _origSave==='function') window.save=function(){ const r=_origSave.apply(this,arguments); try{ cloudPushChanged(); }catch(e){ console.warn('cloudPush failed',e); } return r; };
+    const _origDW=window.deleteWalk;
+    if(typeof _origDW==='function') window.deleteWalk=function(){ const c=DB&&DB.current; const before=((DB.walks&&DB.walks[c])||[]).map(w=>w.id);
+      const r=_origDW.apply(this,arguments); const after=new Set(((DB.walks&&DB.walks[c])||[]).map(w=>w.id));
+      before.forEach(id=>{ if(!after.has(id)) enqueueDelete('walks',id); }); return r; };
+    const _origDM=window.deleteMed;
+    if(typeof _origDM==='function') window.deleteMed=function(){ const c=DB&&DB.current; const before=((DB.meds&&DB.meds[c])||[]).map(m=>m.id);
+      const r=_origDM.apply(this,arguments); const after=new Set(((DB.meds&&DB.meds[c])||[]).map(m=>m.id));
+      before.forEach(id=>{ if(!after.has(id)) enqueueDelete('meds',id); }); return r; };
+    if(typeof window.addEventListener==='function') window.addEventListener('online',()=>{ flushQueue(); });
+    try{ if(sb&&sb.auth&&sb.auth.getUser) sb.auth.getUser().then(({data})=>{ _uid=(data&&data.user&&data.user.id)||null; }).catch(()=>{}); }catch(e){}
+  }
+
+  if(!window.supabase || !window.supabase.createClient){
+    console.warn('Supabase library not loaded — opening in offline mode'); installPushHooks(); startApp(); return; }
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  window.sb = sb;
+  installPushHooks();
+  // Mobile safety net: when the auth session settles or its token refreshes (which on phones
+  // can happen a beat after the first pull), refresh from the cloud again. Guarded on `started`
+  // so it only ever tops up an already-running app — never loops.
+  try{ sb.auth.onAuthStateChange((event, session)=>{ if(session && started){ cloudPull().catch(()=>{}); } }); }catch(e){}
+
+  const css=document.createElement('style'); css.textContent=
+    '#cloudLogin{position:fixed;inset:0;background:var(--green,#1f6f43);display:flex;align-items:center;justify-content:center;z-index:9999;font-family:inherit}'+
+    '#cloudLogin .cl-card{background:#fff;border-radius:14px;padding:26px 22px;width:min(360px,90vw);box-shadow:0 10px 40px rgba(0,0,0,.3);text-align:center}'+
+    '#cloudLogin .cl-title{font-size:20px;font-weight:700;color:var(--green,#1f6f43)}'+
+    '#cloudLogin .cl-sub{font-size:13px;color:#65726a;margin:4px 0 16px}'+
+    '#cloudLogin input{width:100%;box-sizing:border-box;padding:12px;margin:6px 0;border:1px solid #d7ded8;border-radius:8px;font-size:16px}'+
+    '#cloudLogin button{width:100%;padding:12px;margin-top:10px;background:var(--green,#1f6f43);color:#fff;border:0;border-radius:8px;font-size:16px;font-weight:600}'+
+    '#cloudLogin .cl-msg{min-height:18px;color:#c4341f;font-size:13px;margin-top:10px}'+
+    '#cloudSignOut{position:fixed;top:6px;right:8px;z-index:50;font-size:11px;background:rgba(0,0,0,.06);border:0;border-radius:6px;padding:4px 8px;color:#155232}';
+  document.head.appendChild(css);
+
+  // Version badge — so anyone can confirm at a glance they're on the latest build.
+  var APP_VERSION='v3 · 17 Jul';
+  try{ var vtag=document.createElement('div'); vtag.id='verTag'; vtag.textContent=APP_VERSION;
+    vtag.style.cssText='position:fixed;left:4px;bottom:4px;z-index:40;font:10px/1 monospace;color:#7d9488;opacity:.7;pointer-events:none';
+    (document.body||document.documentElement).appendChild(vtag); }catch(e){}
+
+  function showLogin(){
+    if(!document.getElementById('cloudLogin')){
+      const ov=document.createElement('div'); ov.id='cloudLogin';
+      ov.innerHTML='<div class="cl-card"><div class="cl-title">Rhydimoor Broiler Chart</div>'+
+        '<div class="cl-sub">Sign in to the shared records</div>'+
+        '<input id="cl_email" type="email" placeholder="you@rhydimoor.com" autocomplete="username">'+
+        '<input id="cl_pw" type="password" placeholder="Password" autocomplete="current-password">'+
+        '<button id="cl_btn">Sign in</button><div id="cl_msg" class="cl-msg"></div></div>';
+      document.body.appendChild(ov);
+      document.getElementById('cl_btn').onclick=doLogin;
+      document.getElementById('cl_pw').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
+    }
+  }
+  function hideLogin(){ const e=document.getElementById('cloudLogin'); if(e) e.remove(); }
+  // Show + wire the header controls (Sync / Sign out). They live in the green header so they're always
+  // reachable on a phone in either orientation (the old top-right fixed buttons hid behind Safari's bar).
+  function addSignOut(email){
+    const so=document.getElementById('hdrSignOut');
+    if(so){ so.style.display=''; if(email) so.title=email;
+      so.onclick=async()=>{ try{ await sb.auth.signOut(); }catch(e){} location.reload(); }; }
+    const sy=document.getElementById('hdrSync');
+    if(sy){ sy.style.display='';
+      sy.onclick=()=>{ if(sy.disabled) return; sy.disabled=true; const o=sy.textContent; sy.textContent='Syncing…';
+        Promise.resolve(cloudPull()).catch(()=>{}).then(()=>{ sy.disabled=false; sy.textContent=o; if(typeof toast==='function') toast('✓ Synced with cloud');
