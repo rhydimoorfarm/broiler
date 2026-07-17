@@ -1605,4 +1605,25 @@ function init(){ load();
     const sy=document.getElementById('hdrSync');
     if(sy){ sy.style.display='';
       sy.onclick=()=>{ if(sy.disabled) return; sy.disabled=true; const o=sy.textContent; sy.textContent='Syncing…';
-        Promise.resolve(cloudPull()).catch(()=>{}).then(()=>{ sy.disabled=false; sy.textContent=o; if(typeof toast==='function') toast('✓ Synced with cloud');
+        Promise.resolve(cloudPull()).catch(()=>{}).then(()=>{ sy.disabled=false; sy.textContent=o; if(typeof toast==='function') toast('✓ Synced with cloud'); }); }; }
+  }
+  async function doLogin(){
+    const msg=document.getElementById('cl_msg'); msg.textContent='';
+    const email=document.getElementById('cl_email').value.trim();
+    const pw=document.getElementById('cl_pw').value;
+    if(!email||!pw){ msg.textContent='Enter email and password.'; return; }
+    const btn=document.getElementById('cl_btn'); btn.disabled=true; btn.textContent='Signing in…';
+    try{
+      const {data,error}=await sb.auth.signInWithPassword({email,password:pw});
+      if(error){ msg.textContent=error.message||'Sign-in failed.'; btn.disabled=false; btn.textContent='Sign in'; return; }
+      hideLogin(); addSignOut(data.user&&data.user.email); startApp();
+    }catch(e){ msg.textContent='Could not reach the server. Check signal and try again.'; btn.disabled=false; btn.textContent='Sign in'; }
+  }
+  sb.auth.getSession().then(({data})=>{
+    if(data&&data.session){ addSignOut(data.session.user&&data.session.user.email); startApp(); }
+    else { showLogin(); }
+  }).catch(()=>{ showLogin(); });
+})();
+</script>
+</body>
+</html>
