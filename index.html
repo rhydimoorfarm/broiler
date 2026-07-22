@@ -28,6 +28,12 @@
   .htop{display:flex;align-items:center;justify-content:space-between;gap:10px}
   .htop h1{font-size:17px;margin:0;font-weight:700;letter-spacing:.2px}
   .brand-sub{font-size:11px;opacity:.85;font-weight:500;margin-top:1px}
+  .brand-copy{font-size:9px;opacity:.7;font-weight:500;margin-top:2px}
+  .dod{font-weight:700}
+  .dod-flag{color:#c0392b}
+  .dod-na{opacity:.5;font-weight:400}
+  body.trial header{background:linear-gradient(135deg,#e67e22,#b8560f)}
+  .trial-badge{display:inline-block;margin-top:5px;background:#ffd400;color:#111;font-weight:800;font-size:11px;padding:3px 9px;border-radius:6px;letter-spacing:.3px}
   select.house-pick{background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.35);
     border-radius:10px;padding:8px 10px;font-size:14px;font-weight:600;max-width:150px}
   select.house-pick option{color:#000}
@@ -191,8 +197,9 @@
       <div>
         <h1 id="bizName">🐔 Rhydimoor Farms Ltd</h1>
         <div class="brand-sub" id="brandSub">Broiler daily records</div>
+        <div class="brand-copy" id="brandCopy">© 2026 Rhydimoor Farms Ltd · not to be copied or redistributed</div>
       </div>
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+      <div id="hdrControls" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">
         <button id="lockBtn" onclick="toggleLock()" style="display:none;background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:8px 10px;font-size:13px;font-weight:700;cursor:pointer"></button>
         <button id="hdrSync" style="display:none;background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:8px 10px;font-size:13px;font-weight:700;cursor:pointer">↻ Sync</button>
         <select class="house-pick" id="housePick" onchange="selectHouse(this.value)"></select>
@@ -638,6 +645,10 @@ function prevRead(date){ let p=null; for(const e of days()){ if(e.date<date && e
 function readDT(date,mtime){ return new Date(date+'T'+((mtime&&/^\d\d:\d\d/.test(mtime))?mtime:'06:00')+':00'); }
 function intervalH(date,mtime,prev){ if(!prev)return null; if(!mtime||!prev.mtime)return 24; const h=(readDT(date,mtime)-readDT(prev.date,prev.mtime))/3600000; return h>0?h:24; }
 function prevAdj(date){ const es=days().filter(e=>e.date<date); for(let i=es.length-1;i>=0;i--){ const v=es[i].waterAdj!=null?es[i].waterAdj:es[i].waterL; if(v!=null) return v; } return null; }
+/* Day-on-day welfare readout: previous day's total ration (compound+wheat), and a signed % change badge. */
+function prevRation(date){ const es=days().filter(e=>e.date<date); for(let i=es.length-1;i>=0;i--){ const e=es[i]; if(e.feed==null&&e.wheat==null) continue; const f=(e.feed||0)+(e.wheat||0); if(f>0) return f; } return null; }
+function pctDoD(today,prev){ if(today==null||prev==null||prev<=0) return null; return (today-prev)/prev*100; }
+function pctBadge(p){ if(p==null) return '<span class="dod-na">—</span>'; const arrow=p>0?'▲':(p<0?'▼':'▬'); const sign=p>0?'+':(p<0?'−':''); const flag=p<=-15; return `<span class="dod${flag?' dod-flag':''}">${sign}${fmt(Math.abs(p),0)}% ${arrow}</span>`; }
 
 /* ---------------- Nav ---------------- */
 function go(v){ document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));
@@ -739,10 +750,10 @@ function recalc(){
 
   const wc=document.getElementById('waterCalc'); const wa=document.getElementById('waterAlert');
   if(h.watermode==='daily'){ const wd=num('f_waterdaily'); const feed=num('f_feed'); const wheat=num('f_wheat'); const totfeed=(feed||0)+(wheat||0); const per1000=(wd!=null&&remaining)?wd/(remaining/1000):null; const wf=(wd!=null&&totfeed>0)?wd/totfeed:null;
+    const wDoD=pctDoD(wd,prevAdj(date)); const fDoD=(totfeed>0)?pctDoD(totfeed,prevRation(date)):null;
     if(wd!=null){ wc.innerHTML=`<div class="row big"><span>Water used today</span><b>${fmt(wd)} L</b></div>
-      <div class="row"><span>Per 1,000 birds</span><b>${per1000!=null?fmt(per1000,1)+' L':'—'}</b></div>
-      ${totfeed>0?`<div class="row"><span>Feed + wheat (total ration)</span><b>${fmt(totfeed)} kg</b></div>`:''}
-      <div class="row"><span>Water : ration ratio</span><b>${wf!=null?fmt(wf,2):'—'}</b></div>`;
+      <div class="row"><span>Water vs yesterday</span><b>${pctBadge(wDoD)}</b></div>
+      <div class="row"><span>Ration vs yesterday</span><b>${pctBadge(fDoD)}</b></div>`;
       const pw=prevAdj(date);
       if(pw!=null && pw>0 && wd<pw*0.85){ wa.classList.add('show'); wa.textContent=`⚠ Water down ${fmt((1-wd/pw)*100,0)}% on the previous day. A sudden drop is often the first sign of a health or equipment problem — check the birds and drinker lines.`; }
       else wa.classList.remove('show');
@@ -755,12 +766,11 @@ function recalc(){
   if(meter!=null && pr){ const raw=meter-pr.meter; const ih=intervalH(date,mtime,pr); const adj=(ih&&ih>0)?raw*24/ih:raw;
     const per1000=remaining?adj/(remaining/1000):null; const feed=num('f_feed'); const wheat=num('f_wheat'); const totfeed=(feed||0)+(wheat||0); const wf=(totfeed>0)?adj/totfeed:null;
     const adjNote=(mtime&&pr.mtime)?` <span style="font-weight:400">(over ${fmt(ih,1)} h)</span>`:' <span style="font-weight:400">(times not set — assumed 24 h)</span>';
+    const wDoD=pctDoD(adj,prevAdj(date)); const fDoD=(totfeed>0)?pctDoD(totfeed,prevRation(date)):null;
     wc.innerHTML=`<div class="row"><span>Previous reading${pr.mtime?' ('+pr.mtime+')':''}</span><b>${fmt(pr.meter)}</b></div>
-      <div class="row"><span>Raw usage${adjNote}</span><b>${fmt(raw)} L</b></div>
       <div class="row big"><span>Adjusted 24 h use</span><b>${fmt(adj)} L</b></div>
-      <div class="row"><span>Per 1,000 birds (24 h)</span><b>${per1000!=null?fmt(per1000,1)+' L':'—'}</b></div>
-      ${totfeed>0?`<div class="row"><span>Feed + wheat (total ration)</span><b>${fmt(totfeed)} kg</b></div>`:''}
-      <div class="row"><span>Water : ration ratio (24 h)</span><b>${wf!=null?fmt(wf,2):'—'}</b></div>`;
+      <div class="row"><span>Water vs yesterday</span><b>${pctBadge(wDoD)}</b></div>
+      <div class="row"><span>Ration vs yesterday</span><b>${pctBadge(fDoD)}</b></div>`;
     const pw=prevAdj(date);
     if(raw<0){ wa.classList.add('show'); wa.textContent='⚠ Reading is lower than the previous one — check the meter number.'; }
     else if(pw!=null && pw>0 && adj<pw*0.85){ wa.classList.add('show'); wa.textContent=`⚠ Water down ${fmt((1-adj/pw)*100,0)}% on the last reading (24 h-adjusted). A sudden drop is often the first sign of a health or equipment problem — check the birds and drinker lines.`; }
@@ -1413,8 +1423,10 @@ function init(){ load();
     if(!_farms || _farms.length<2){ const ex=document.getElementById('cloudFarmSel'); if(ex) ex.remove(); return; }
     let sel=document.getElementById('cloudFarmSel');
     if(!sel){ sel=document.createElement('select'); sel.id='cloudFarmSel';
-      sel.style.cssText='position:fixed;top:6px;left:8px;z-index:50;font-size:11px;border:0;border-radius:6px;padding:4px 6px;background:rgba(0,0,0,.06);color:#155232';
-      sel.onchange=()=>switchFarm(sel.value); document.body.appendChild(sel); }
+      sel.style.cssText='font-size:13px;font-weight:700;border:1px solid rgba(255,255,255,.5);border-radius:10px;padding:7px 8px;background:#fff;color:#155232';
+      sel.onchange=()=>switchFarm(sel.value);
+      const host=document.getElementById('hdrControls');
+      if(host) host.insertBefore(sel, host.firstChild); else document.body.appendChild(sel); }
     sel.innerHTML=_farms.slice().sort((a,b)=>((a.name||a.id)<(b.name||b.id))?-1:1)
       .map(f=>'<option value="'+f.id+'"'+(f.id===DB.cloudFarmId?' selected':'')+'>'+(f.name||f.id)+'</option>').join('');
   }
