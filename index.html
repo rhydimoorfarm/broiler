@@ -6,6 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#1f6f43">
+<meta name="build" content="2026-07-26-farmfix">
 <title>Broiler Chart — Daily Records</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -1275,7 +1276,7 @@ function init(){ load();
   }
 
   function cnum(v){ return (v===null||v===undefined||v==='')?null:(isNaN(Number(v))?null:Number(v)); }
-  async function cloudPull(){
+  async function cloudPull(targetFarmId){
     // NB: deliberately NOT bailing on navigator.onLine===false — iOS can falsely report
     // "offline" for a moment and that was skipping the pull entirely, leaving phones on the
     // empty "set up a house" screen. If we're truly offline the fetch below just throws and
@@ -1301,7 +1302,7 @@ function init(){ load();
     if(!farms || !farms.length){ _dbg('GIVING UP — no farms visible for this login'); console.warn('cloudPull: no farms visible for this user'); return; }
     _farms=farms.slice();   // remember which sites this login may see (for the farm switcher)
 
-    let farmId = (DB && DB.cloudFarmId) || null;
+    let farmId = targetFarmId || (DB && DB.cloudFarmId) || null;
     if(!farmId || !farms.some(f=>f.id===farmId)){
       const byName = (DB&&DB.farm&&DB.farm.name) ? farms.find(f=>f.name===DB.farm.name) : null;
       farms.sort((a,b)=>a.id<b.id?-1:1);
@@ -1356,7 +1357,7 @@ function init(){ load();
         dnno:p.dn_no||'', dndate:p.dn_date||'', dnhatch:p.dn_hatch||'',
         dnvacc:p.dn_vacc||'', dntimes:p.dn_times||'',
         flockcode:p.flockcode||'', flockage:cnum(p.flockage),
-        batches:[], _placementId:p.id||null
+        batches:[], _placementId:p.id||null, _farm:farmId
       };
       newDB.houses.push(ho); houseById[h.id]=ho;
       newDB.days[h.id]=[]; newDB.walks[h.id]=[]; newDB.meds[h.id]=[];
@@ -1414,8 +1415,11 @@ function init(){ load();
     if(!id || (DB && id===DB.cloudFarmId)) return;
     (async()=>{
       try{ await flushQueue(); }catch(e){}            // land pending writes for the current site first
-      DB.cloudFarmId=id;                               // cloudPull persists + rebaselines; must NOT push here
-      try{ await cloudPull(); }catch(e){ if(typeof toast==='function') toast('Could not switch site — check signal'); }
+      // Do NOT set DB.cloudFarmId here. cloudPull(id) only commits the new farm (and its cloudFarmId)
+      // once the fresh data has been fetched and swapped in. If the pull fails/early-returns (e.g. the
+      // mobile token race returns an empty farm set), DB stays on the CURRENT farm — so a later save can
+      // never re-stamp this farm's houses onto the target farm. That mismatch was the mis-tag bug.
+      try{ await cloudPull(id); }catch(e){ if(typeof toast==='function') toast('Could not switch site — check signal'); }
       finally{ _suspendPush=false; }
     })();
   }
@@ -1457,7 +1461,8 @@ function init(){ load();
     out['farms:'+fid]={table:'farms', row:{ id:fid, name:(DB.farm&&DB.farm.name)||'', keeper:(DB.farm&&DB.farm.keeper)||null,
       integrator:(DB.farm&&DB.farm.integrator)||'Avara', opinit:(DB.farm&&DB.farm.opinit)||null, deleted:false }};
     (DB.houses||[]).forEach(h=>{
-      out['houses:'+h.id]={table:'houses', row:{ id:h.id, farm_id:fid, name:h.name||'', area:nOrNull(h.area), breed:h.breed||null, deleted:false }};
+      if(h._farm && h._farm!==fid) return;             // never push a house under a farm it doesn't belong to
+      out['houses:'+h.id]={table:'houses', row:{ id:h.id, farm_id:(h._farm||fid), name:h.name||'', area:nOrNull(h.area), breed:h.breed||null, deleted:false }};
       const pid=placementIdOf(h);
       out['placements:'+pid]={table:'placements', row:{ id:pid, house_id:h.id, cycle:h.cycle||null, placed_date:dOrNull(h.placed), birds:nOrNull(h.birds),
         placeno:h.placeno||null, breed:h.breed||null, flockcode:h.flockcode||null, flockage:nOrNull(h.flockage),
@@ -1552,7 +1557,7 @@ function init(){ load();
     // One-time recovery: earlier builds could leave a failed push op stuck in the queue (a partial
     // upsert the RLS rejected), which then blocks every later push. Bump PUSH_SCHEMA to drop the
     // stale queue + baseline so devices heal themselves; the next pull rebuilds the baseline.
-    try{ const PUSH_SCHEMA='3'; if(localStorage.getItem(QKEY+'_v')!==PUSH_SCHEMA){ localStorage.removeItem(QKEY); localStorage.removeItem(BKEY); localStorage.setItem(QKEY+'_v',PUSH_SCHEMA); } }catch(e){}
+    try{ const PUSH_SCHEMA='4'; if(localStorage.getItem(QKEY+'_v')!==PUSH_SCHEMA){ localStorage.removeItem(QKEY); localStorage.removeItem(BKEY); localStorage.setItem(QKEY+'_v',PUSH_SCHEMA); } }catch(e){}
     const _origSave=window.save;
     if(typeof _origSave==='function') window.save=function(){ const r=_origSave.apply(this,arguments); try{ cloudPushChanged(); }catch(e){ console.warn('cloudPush failed',e); } return r; };
     const _origDW=window.deleteWalk;
