@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#1f6f43">
-<meta name="build" content="2026-07-26-farmfix">
+<meta name="build" content="2026-08-10-checkdays">
 <title>Broiler Chart — Daily Records</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -1179,7 +1179,7 @@ function buildAvaraChart(){ const h=curHouse(); if(!h)return null;
     const day=cropDay(h.placed,date); const wn=wkNoOf(date);
     if(lastWk!==null && wn!==lastWk){ num.push(wkTot(lastWk,wk)); wk={dead:0,culls:0,leg:0,small:0,disease:0}; }
     lastWk=wn; wk.dead+=t.dead; wk.culls+=t.culls; wk.leg+=t.leg; wk.small+=t.small; wk.disease+=t.disease;
-    const c=wkChk[wn]||(wkChk[wn]={fire:0,gen:0,foot:0,dial:0,alarm:0}); if(e.fireext)c.fire++; if(e.generator)c.gen++; if(e.footdip)c.foot++; if(e.dialout)c.dial++; if(e.alarm)c.alarm++;
+    const c=wkChk[wn]||(wkChk[wn]={fire:[],gen:[],foot:[],dial:[],alarm:[]}); if(e.fireext)c.fire.push(day); if(e.generator)c.gen.push(day); if(e.footdip)c.foot.push(day); if(e.dialout)c.dial.push(day); if(e.alarm)c.alarm.push(day);
     const rem=h.birds?h.birds-cum-cumT:''; const wuse=e.waterAdj!=null?e.waterAdj:e.waterL;
     const dmr=h.birds?(t.dep/h.birds*100).toFixed(2):''; const cdmr=h.birds?(cum/h.birds*100).toFixed(2):'';
     const ws=walksOn(date); const req=(day!=null&&day<=7)?3:2; const wslot=i=>{ const w=ws[i]; return `<td>${w?(w.time||''):''}</td><td>${w?esc(ini(w.op)):''}</td>`; }; const wnote=ws.map(w=>w.note).filter(Boolean).map(esc).join('; '); const dTint=(ws.length<req)?' style="background:#ffe0e0;font-weight:700"':'';
@@ -1194,7 +1194,7 @@ function buildAvaraChart(){ const h=curHouse(); if(!h)return null;
   }).join('');
   /* ---- weekly check & sample box (own frequencies) ---- */
   const maxWk=Math.max(1,...dates.map(wkNoOf));
-  const tkc=(n,req)=>{ n=n||0; req=req||1; const ok=n>=req; const txt=ok?('✓'+(n>req?' ×'+n:'')):(n>0?(n+'/'+req):'—'); return `<td style="${ok?'':'background:#ffe0e0;font-weight:700'}">${txt}</td>`; };
+  const tkc=(arr,req)=>{ arr=arr||[]; req=req||1; const ok=arr.length>=req; const dl=arr.filter(d=>d!=null).map(d=>'d'+d).join(', '); const txt=arr.length?((ok?'✓ ':(arr.length+'/'+req+' '))+dl):'—'; return `<td style="text-align:left;${ok?'':'background:#ffe0e0;font-weight:700'}">${txt}</td>`; };
   let wkBox=''; for(let i=1;i<=maxWk;i++){ const c=wkChk[i]||{}; wkBox+=`<tr><td>${i}</td>${tkc(c.fire,1)}${tkc(c.gen,1)}${tkc(c.foot,2)}${tkc(c.dial,1)}</tr>`; }
   /* ---- litter score box (weekly: days 7/14/21/28/35) ---- */
   let litBox=''; [7,14,21,28,35].forEach(d=>{ const dt=h.placed?addDays(h.placed,d):null; const e=dt?dset.find(x=>x.date===dt):null; litBox+=`<tr><td>${d}</td><td>${e&&e.litter!=null?e.litter:''}</td><td style="text-align:left">${e&&e.littercmt?esc(e.littercmt):''}</td></tr>`; });
