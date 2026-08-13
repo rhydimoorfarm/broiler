@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#1f6f43">
-<meta name="build" content="2026-08-10-checkdays">
+<meta name="build" content="2026-08-10-meds">
 <title>Broiler Chart — Daily Records</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -33,8 +33,27 @@
   .dod{font-weight:700}
   .dod-flag{color:#c0392b}
   .dod-na{opacity:.5;font-weight:400}
-  body.trial header{background:linear-gradient(135deg,#e67e22,#b8560f)}
-  .trial-badge{display:inline-block;margin-top:5px;background:#ffd400;color:#111;font-weight:800;font-size:11px;padding:3px 9px;border-radius:6px;letter-spacing:.3px}
+  .mbook{display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.45);overflow:auto}
+  .mbook-inner{background:#fff;max-width:1200px;margin:16px auto;border-radius:12px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.3)}
+  .mbook-head{display:flex;align-items:center;gap:8px;padding:12px 14px;background:linear-gradient(135deg,var(--green),var(--green-d));color:#fff}
+  .mbook-sub{font-weight:400;font-size:13px;opacity:.9;flex:1}
+  .mbook-x{background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:8px;padding:6px 10px;cursor:pointer;font-weight:700}
+  .mbook-filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid #eee}
+  .mbook-filters select,.mbook-filters input{padding:6px 8px;border:1px solid #ccc;border-radius:8px;font-size:13px}
+  .mbook-body{padding:8px 14px 16px;overflow:auto}
+  .mbook-table{width:100%;border-collapse:collapse;font-size:12px}
+  .mbook-table th,.mbook-table td{border:1px solid #ddd;padding:4px 6px;text-align:left;white-space:nowrap}
+  .mbook-table th{background:#f4f4f4;position:sticky;top:0}
+  .mbook-table tbody tr{cursor:pointer}
+  .mbook-table tbody tr:hover{background:var(--bg,#f4f8f5)}
+  .medsheet{max-width:640px;margin:0 auto;border:1px solid #ccc;border-radius:8px;padding:16px 18px;background:#fff}
+  .medsheet h3{font-size:16px;margin:0 0 4px}
+  .medsheet-sub{font-size:12px;color:#555;margin-bottom:12px}
+  .medsheet-t{width:100%;border-collapse:collapse;font-size:13px}
+  .medsheet-t td{border-bottom:1px solid #eee;padding:6px 8px;vertical-align:top}
+  .medsheet-t td.k{width:46%;color:#555}
+  .medsheet-t td.v{font-weight:600}
+  @media print{ body>*{display:none !important} #medBookOverlay{display:block !important;position:static;background:#fff} #medBookOverlay .mbook-inner{max-width:none;margin:0;box-shadow:none} .no-print{display:none !important} .mbook-table{font-size:10px} .medsheet{border:0;max-width:none} }
   select.house-pick{background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.35);
     border-radius:10px;padding:8px 10px;font-size:14px;font-weight:600;max-width:150px}
   select.house-pick option{color:#000}
@@ -199,6 +218,7 @@
         <h1 id="bizName">🐔 Rhydimoor Farms Ltd</h1>
         <div class="brand-sub" id="brandSub">Broiler daily records</div>
         <div class="brand-copy" id="brandCopy">© 2026 Rhydimoor Farms Ltd · not to be copied or redistributed</div>
+        
       </div>
       <div id="hdrControls" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">
         <button id="lockBtn" onclick="toggleLock()" style="display:none;background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:8px 10px;font-size:13px;font-weight:700;cursor:pointer"></button>
@@ -360,10 +380,11 @@
     <section class="view" id="v-meds">
       <div class="card">
         <h2><span class="em">💉</span> Medicines &amp; vaccines</h2>
-        <p class="section-note">A full treatment log for this house — needed for Red Tractor, the medicine book, and the Food Chain Information form. The app works out the earliest slaughter date from the withdrawal period.</p>
+        <p class="section-note">Your Veterinary Medicines Record Book for this house — needed for Red Tractor, the medicine book and the Food Chain Information form. Records vaccines and medicines alike. The app works out the safe-slaughter date and time from the finish date/time plus the withdrawal hours.</p>
         <div id="medList"></div>
         <button class="btn med" onclick="newMed()" style="margin-top:6px">➕ Add treatment / vaccine</button>
         <button class="btn sec" onclick="exportMedsCSV()" style="margin-top:10px">⬇️ Download medicines log (CSV)</button>
+        <button class="btn sec" onclick="openMedBook()" style="margin-top:10px">📖 Medicine Book — all crops &amp; farms</button>
       </div>
 
       <div class="card" id="medFormCard" style="display:none">
@@ -375,33 +396,50 @@
             <option value="Medicine">Other medicine</option>
             <option value="Supplement">Supplement / vitamin</option>
           </select></div>
-        <div class="fld"><label>Product name (exactly as on label)</label><input type="text" id="m_product" placeholder="e.g. Nobilis IB / Amoxinsol"></div>
+        <div class="fld"><label>Product name (exactly as on label)</label><input type="text" id="m_product" placeholder="e.g. Cevac IBD / Lincospectin"></div>
         <div class="grid2">
-          <div class="fld"><label>Batch number</label><input type="text" id="m_batch" placeholder="batch"></div>
-          <div class="fld"><label>Expiry date</label><input type="date" id="m_expiry"></div>
+          <div class="fld"><label>Supplying veterinary practice</label><input type="text" id="m_vetpractice" placeholder="e.g. Wyatt"></div>
+          <div class="fld"><label>Date of purchase</label><input type="date" id="m_purchdate"></div>
+        </div>
+        <div class="fld"><label>Species to be treated</label><input type="text" id="m_species" placeholder="Broilers"></div>
+        <div class="fld" style="margin-bottom:4px"><label>Batches supplied — add a line for each batch (number · pack size · quantity · expiry · quantity used)</label></div>
+        <div id="medBatchList"></div>
+        <button class="btn ghost" type="button" onclick="addMedBatch()" style="margin-bottom:6px">➕ Add batch line</button>
+        <div class="grid2">
+          <div class="fld"><label>Identity of animals treated (house / site)</label><input type="text" id="m_birds" placeholder="e.g. Site, House 1"></div>
+          <div class="fld"><label>Number of animals treated</label><input type="number" inputmode="numeric" id="m_numtreated" placeholder="e.g. 108000"></div>
+        </div>
+        <div class="fld"><label>Reason for treatment</label><textarea id="m_reason" rows="2" placeholder="e.g. bacterial infection / vaccine"></textarea></div>
+        <div class="grid2">
+          <div class="fld"><label>Quantity used (total)</label><input type="text" id="m_qtyused" placeholder="e.g. 22 x 150g"></div>
+          <div class="fld"><label>Dosage rate</label><input type="text" id="m_dose" placeholder="e.g. 50 mg/kg"></div>
+        </div>
+        <div class="fld"><label>Mode of administration</label>
+          <select class="fldsel" id="m_route">
+            <option>In water</option><option>In feed</option><option>Injection</option>
+            <option>Spray / aerosol</option><option>Eye drop</option><option>Topical</option><option>Day-old (hatchery)</option>
+          </select></div>
+        <div class="grid2">
+          <div class="fld"><label>Date treatment started</label><input type="date" id="m_start" onchange="medCalc()"></div>
+          <div class="fld"><label>Time started</label><input type="time" id="m_starttime" onchange="medCalc()"></div>
         </div>
         <div class="grid2">
-          <div class="fld"><label>Date started</label><input type="date" id="m_start" onchange="medCalc()"></div>
-          <div class="fld"><label>Date ended</label><input type="date" id="m_end" onchange="medCalc()"></div>
+          <div class="fld"><label>Date treatment finished</label><input type="date" id="m_end" onchange="medCalc()"></div>
+          <div class="fld"><label>Time finished</label><input type="time" id="m_endtime" onchange="medCalc()"></div>
         </div>
         <div class="grid2">
-          <div class="fld"><label>Dose</label><input type="text" id="m_dose" placeholder="e.g. 20mg/kg"></div>
-          <div class="fld"><label>Route</label>
-            <select class="fldsel" id="m_route">
-              <option>In water</option><option>In feed</option><option>Injection</option>
-              <option>Spray / aerosol</option><option>Eye drop</option><option>Topical</option><option>Day-old (hatchery)</option>
-            </select></div>
+          <div class="fld" id="wdWrap"><label>Withdrawal period (meat)</label><div class="unit"><input type="number" inputmode="numeric" id="m_wd" placeholder="0" oninput="medCalc()"><span class="u">hours</span></div></div>
+          <div class="fld"><label>Method of disposal of containers</label><input type="text" id="m_disposal" placeholder="e.g. wash &amp; bin / incineration"></div>
         </div>
-        <div class="grid2">
-          <div class="fld" id="wdWrap"><label>Withdrawal period (meat)</label><div class="unit"><input type="number" inputmode="numeric" id="m_wd" placeholder="0" oninput="medCalc()"><span class="u">days</span></div></div>
-          <div class="fld"><label>Birds / houses treated</label><input type="text" id="m_birds" placeholder="e.g. all, House 1"></div>
-        </div>
-        <div class="fld"><label>Administered by</label><input type="text" id="m_admin" placeholder="Name"></div>
+        <div class="fld"><label>Name of administrator (printed)</label><input type="text" id="m_admin" placeholder="Name"></div>
         <div class="grid2" id="vetWrap">
           <div class="fld"><label>Prescribing vet</label><input type="text" id="m_vet" placeholder="Vet / practice"></div>
           <div class="fld"><label>Prescription ref</label><input type="text" id="m_rx" placeholder="Rx number"></div>
         </div>
-        <div class="fld"><label>Reason / notes</label><textarea id="m_reason" rows="2" placeholder="Indication, withdrawal observed, etc."></textarea></div>
+        <div class="grid2" id="abxWrap" style="display:none">
+          <div class="fld"><label>Total antibiotic used (mg)</label><input type="number" inputmode="decimal" id="m_totalmg" placeholder="optional"></div>
+          <div class="fld"><label>mg per PCU (entered manually)</label><input type="number" inputmode="decimal" id="m_mgpcu" placeholder="optional"></div>
+        </div>
         <div class="calc" id="medCalcBox"></div>
         <div class="btnrow" style="margin-top:12px"><button class="btn primary" onclick="saveMed()">Save</button><button class="btn sec" onclick="cancelMed()">Cancel</button></div>
         <button class="btn danger" id="medDelBtn" style="display:none;margin-top:10px" onclick="deleteMed()">Delete this entry</button>
@@ -836,34 +874,94 @@ function renderMeds(){
   if(!curHouse()){ wrap.innerHTML='<p class="muted-sm">Add a house first.</p>'; return; }
   if(!ms.length){ wrap.innerHTML='<div class="walknone">No treatments logged for this house yet.</div>'; return; }
   const ic={Vaccine:'💉',Antibiotic:'🧪',Medicine:'💊',Supplement:'🟢'};
-  wrap.innerHTML=ms.map(m=>{ const clear=(m.end&&m.wd!=null)?addDays(m.end,m.wd):null;
+  wrap.innerHTML=ms.map(m=>{
+    const ss=(m.ssdate)?{date:m.ssdate,time:m.sstime||''}:((m.end&&m.wdh!=null)?safeSlaughter(m.end,m.endtime,m.wdh):null);
+    const legacy=(!ss&&m.end&&m.wd!=null)?addDays(m.end,m.wd):null;
+    let tag='';
+    if(ss&&Number(m.wdh)>0) tag=`<span class="wdtag">Safe to slaughter from ${ss.date}${ss.time?' '+ss.time:''}</span>`;
+    else if(Number(m.wdh)===0||m.type==='Vaccine') tag='<span class="wdtag">Safe straightaway — no withdrawal</span>';
+    else if(legacy) tag=`<span class="wdtag">Clear for slaughter from ${legacy} (${m.wd}d)</span>`;
     return `<div class="medrow" onclick="editMed('${m.id}')">
       <div class="mt"><span>${ic[m.type]||'💊'} ${escapeHtml(m.product||m.type)}</span><span class="pill">edit</span></div>
       <div class="ms">${m.type}${m.route?' · '+m.route:''}${m.start?' · '+m.start:''}${m.end&&m.end!==m.start?'→'+m.end:''}${m.birds?' · '+escapeHtml(m.birds):''}${m.vet?' · vet '+escapeHtml(m.vet):''}</div>
-      ${clear?`<span class="wdtag">Clear for slaughter from ${clear} (${m.wd}d withdrawal)</span>`:(m.type==='Vaccine'?'<span class="wdtag">No meat withdrawal</span>':'')}
+      ${tag}
     </div>`; }).join('');
 }
-function medFormSync(){ const t=val('m_type'); document.getElementById('vetWrap').style.display=(t==='Antibiotic'||t==='Medicine')?'grid':'none';
-  document.getElementById('wdWrap').style.display=(t==='Vaccine')?'none':'block'; }
-function medCalc(){ const end=val('m_end'),wd=num('m_wd'); const box=document.getElementById('medCalcBox');
-  if(end&&wd!=null){ box.innerHTML=`<div class="row big"><span>Earliest slaughter date</span><b>${addDays(end,wd)}</b></div><div class="row"><span>${wd} day withdrawal after last treatment</span><b></b></div>`; }
-  else box.innerHTML='<div class="row"><span>Enter end date + withdrawal for clearance date</span><b></b></div>'; }
+function medFormSync(){ /* the book records the same fields for every type; the antibiotic mg block only shows for antibiotics */
+  const vw=document.getElementById('vetWrap'); if(vw) vw.style.display='grid';
+  const ww=document.getElementById('wdWrap'); if(ww) ww.style.display='block';
+  const aw=document.getElementById('abxWrap'); if(aw) aw.style.display=(val('m_type')==='Antibiotic')?'grid':'none'; }
+/* Safe slaughter = treatment FINISHED date/time + withdrawal HOURS (the book uses hours). */
+function safeSlaughter(endDate,endTime,wdh){ if(!endDate||wdh==null||wdh==='') return null;
+  const p=n=>String(n).padStart(2,'0');
+  const t=(endTime&&/^\d{1,2}:\d{2}/.test(endTime))?endTime:'00:00';
+  const d=new Date(endDate+'T'+t+':00'); if(isNaN(d.getTime())) return null;
+  d.setTime(d.getTime()+Number(wdh)*3600000);
+  return { date:d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()), time:p(d.getHours())+':'+p(d.getMinutes()) }; }
+/* Display text for the safe-slaughter column: 0-hour withdrawal = safe straightaway, not blank. */
+function safeSlaughterText(wdh,ssDate,ssTime){ const n=(wdh===''||wdh==null)?null:Number(wdh);
+  if(n===0) return 'Safe straightaway (no withdrawal)';
+  if(ssDate) return ssDate+(ssTime?' '+ssTime:''); return ''; }
+function medCalc(){ const end=val('m_end'),et=val('m_endtime'),wdh=num('m_wd'); const box=document.getElementById('medCalcBox');
+  if(Number(wdh)===0){ box.innerHTML='<div class="row big"><span>Safe to slaughter</span><b>straightaway — no withdrawal</b></div>'; return; }
+  const ss=safeSlaughter(end,et,wdh);
+  if(ss){ box.innerHTML=`<div class="row big"><span>Safe to slaughter from</span><b>${ss.date} ${ss.time}</b></div><div class="row"><span>${fmt(wdh)} h withdrawal after treatment finished</span><b></b></div>`; }
+  else box.innerHTML='<div class="row"><span>Enter finish date/time + withdrawal hours for the safe-slaughter date</span><b></b></div>'; }
+/* ---- Medicine batches: one treatment can span several batches / pack sizes ---- */
+let MEDBATCHES=[];
+function renderMedBatchRows(){ const list=document.getElementById('medBatchList'); if(!list)return;
+  list.innerHTML=MEDBATCHES.map((b,i)=>`
+  <div class="mbatchrow" style="border:1px dashed #c3d2c6;border-radius:10px;padding:10px 10px 2px;margin:0 0 10px">
+    <div class="grid2">
+      <div class="fld"><label>Batch number</label><input type="text" class="mb_batch" value="${escapeHtml(b.batch||'')}" placeholder="e.g. 200440431A"></div>
+      <div class="fld"><label>Expiry date</label><input type="date" class="mb_expiry" value="${b.expiry||''}"></div>
+    </div>
+    <div class="grid3">
+      <div class="fld"><label>Pack size</label><input type="text" class="mb_packsize" value="${escapeHtml(b.packsize||'')}" placeholder="e.g. 150g / 10000 dose"></div>
+      <div class="fld"><label>Quantity supplied</label><input type="text" class="mb_qty" value="${escapeHtml(b.qty||'')}" placeholder="e.g. 22"></div>
+      <div class="fld"><label>Quantity used</label><input type="text" class="mb_used" value="${escapeHtml(b.used||'')}" placeholder="e.g. 22"></div>
+    </div>
+    <div class="fld"><button type="button" class="btn sec" onclick="removeMedBatch(${i})">✕ Remove batch</button></div>
+  </div>`).join(''); }
+function addMedBatch(){ readMedBatchRows(); MEDBATCHES.push({batch:'',packsize:'',qty:'',expiry:'',used:''}); renderMedBatchRows(); }
+function removeMedBatch(i){ readMedBatchRows(); MEDBATCHES.splice(i,1); renderMedBatchRows(); }
+function readMedBatchRows(){ const rows=document.querySelectorAll('#medBatchList .mbatchrow');
+  rows.forEach((row,i)=>{ const g=c=>row.querySelector('.'+c);
+    MEDBATCHES[i]={batch:g('mb_batch').value.trim(),packsize:g('mb_packsize').value.trim(),qty:g('mb_qty').value.trim(),expiry:g('mb_expiry').value,used:g('mb_used').value.trim()}; }); }
+function asBatchArr(v){ if(Array.isArray(v)) return v; if(typeof v==='string'&&v){ try{ const p=JSON.parse(v); return Array.isArray(p)?p:[]; }catch(e){} } return []; }
+function batchesToText(bs){ bs=asBatchArr(bs); if(!bs||!bs.length) return '';
+  return bs.map(b=>[b.batch,(b.packsize?('pack '+b.packsize):''),(b.qty?('qty '+b.qty):''),(b.expiry?('exp '+b.expiry):''),(b.used?('used '+b.used):'')].filter(Boolean).join(' · ')).join('  ;  '); }
+function batchCell(m){ const bs=asBatchArr(m.batches); const first=(m.batch||(bs[0]&&bs[0].batch)||''); return first+(bs.length>1?(' (+'+(bs.length-1)+')'):''); }
 function newMed(){ editingMed=null; document.getElementById('medFormTitle').textContent='New entry';
-  ['m_product','m_batch','m_expiry','m_dose','m_birds','m_admin','m_vet','m_rx','m_reason'].forEach(i=>setv(i,''));
-  setv('m_type','Vaccine'); setv('m_start',today()); setv('m_end',today()); setv('m_wd','');
+  ['m_product','m_vetpractice','m_purchdate','m_birds','m_numtreated','m_reason','m_qtyused','m_dose','m_starttime','m_endtime','m_disposal','m_admin','m_vet','m_rx','m_totalmg','m_mgpcu'].forEach(i=>setv(i,''));
+  setv('m_type','Vaccine'); setv('m_species','Broilers'); setv('m_start',today()); setv('m_end',today()); setv('m_wd','');
+  MEDBATCHES=[{batch:'',packsize:'',qty:'',expiry:'',used:''}]; renderMedBatchRows();
   document.getElementById('medDelBtn').style.display='none'; medFormSync(); medCalc();
   document.getElementById('medFormCard').style.display='block'; document.getElementById('medFormCard').scrollIntoView({behavior:'smooth'}); }
 function editMed(id){ const m=(DB.meds[DB.current]||[]).find(x=>x.id===id); if(!m)return; editingMed=id;
   document.getElementById('medFormTitle').textContent=m.product||'Entry';
-  setv('m_type',m.type);setv('m_product',m.product);setv('m_batch',m.batch);setv('m_expiry',m.expiry);
-  setv('m_start',m.start);setv('m_end',m.end);setv('m_dose',m.dose);setv('m_route',m.route);setv('m_wd',m.wd);
-  setv('m_birds',m.birds);setv('m_admin',m.admin);setv('m_vet',m.vet);setv('m_rx',m.rx);setv('m_reason',m.reason);
+  setv('m_type',m.type);setv('m_product',m.product);setv('m_vetpractice',m.vetpractice);setv('m_purchdate',m.purchdate);
+  setv('m_species',m.species||'Broilers');
+  MEDBATCHES=(m.medbatches&&m.medbatches.length)?m.medbatches.map(x=>Object.assign({},x)):((m.batch||m.expiry||m.packsize)?[{batch:m.batch||'',packsize:m.packsize||'',qty:'',expiry:m.expiry||'',used:''}]:[{batch:'',packsize:'',qty:'',expiry:'',used:''}]);
+  renderMedBatchRows();
+  setv('m_birds',m.birds);setv('m_numtreated',m.numtreated);setv('m_reason',m.reason);setv('m_qtyused',m.qtyused);setv('m_dose',m.dose);setv('m_route',m.route);
+  setv('m_start',m.start);setv('m_starttime',m.starttime);setv('m_end',m.end);setv('m_endtime',m.endtime);
+  setv('m_wd', m.wdh!=null?m.wdh:(m.wd!=null?m.wd*24:''));
+  setv('m_disposal',m.disposal);setv('m_admin',m.admin);setv('m_vet',m.vet);setv('m_rx',m.rx);
+  setv('m_totalmg',m.totalmg);setv('m_mgpcu',m.mgpcu);
   document.getElementById('medDelBtn').style.display='block'; medFormSync(); medCalc();
   document.getElementById('medFormCard').style.display='block'; document.getElementById('medFormCard').scrollIntoView({behavior:'smooth'}); }
 function cancelMed(){ document.getElementById('medFormCard').style.display='none'; }
 function saveMed(){ const product=val('m_product').trim(); if(!product){toast('Enter the product name');return;}
-  const data={type:val('m_type'),product,batch:val('m_batch'),expiry:val('m_expiry'),start:val('m_start'),end:val('m_end'),
-    dose:val('m_dose'),route:val('m_route'),wd:num('m_wd'),birds:val('m_birds'),admin:val('m_admin'),vet:val('m_vet'),rx:val('m_rx'),reason:val('m_reason')};
+  const wdh=num('m_wd'); const ss=safeSlaughter(val('m_end'),val('m_endtime'),wdh);
+  readMedBatchRows(); const mbs=MEDBATCHES.filter(b=>b.batch||b.packsize||b.qty||b.expiry||b.used); const b0=mbs[0]||{};
+  const data={type:val('m_type'),product,vetpractice:val('m_vetpractice'),purchdate:val('m_purchdate'),batch:b0.batch||'',expiry:b0.expiry||'',
+    packsize:(b0.packsize||'')+(b0.qty?(' × '+b0.qty):''),species:val('m_species'),birds:val('m_birds'),numtreated:num('m_numtreated'),reason:val('m_reason'),medbatches:mbs,
+    qtyused:val('m_qtyused'),dose:val('m_dose'),route:val('m_route'),
+    start:val('m_start'),starttime:val('m_starttime'),end:val('m_end'),endtime:val('m_endtime'),
+    wdh:wdh,disposal:val('m_disposal'),admin:val('m_admin'),vet:val('m_vet'),rx:val('m_rx'),
+    totalmg:num('m_totalmg'),mgpcu:num('m_mgpcu'),
+    ssdate:ss?ss.date:null,sstime:ss?ss.time:null};
   if(!DB.meds[DB.current])DB.meds[DB.current]=[];
   if(editingMed){ if(!requireAdmin('Only admin can change an existing treatment record'))return; const m=DB.meds[DB.current].find(x=>x.id===editingMed); Object.assign(m,data); logAction('edit med',product); }
   else { DB.meds[DB.current].push(Object.assign({id:uid('m')},data)); logAction('add med',product); }
@@ -871,6 +969,104 @@ function saveMed(){ const product=val('m_product').trim(); if(!product){toast('E
 function deleteMed(){ if(!requireAdmin('Only admin can delete a treatment record'))return; if(!editingMed)return; if(!confirm('Delete this treatment record?'))return;
   DB.meds[DB.current]=(DB.meds[DB.current]||[]).filter(x=>x.id!==editingMed); save();
   document.getElementById('medFormCard').style.display='none'; renderMeds(); toast('Deleted'); }
+
+/* ---------- Medicine Book: every treatment across ALL crops & farms (audit register) ---------- */
+let _medBookRows=[]; let _medBookView=[];
+async function openMedBook(){
+  let ov=document.getElementById('medBookOverlay');
+  if(!ov){ ov=document.createElement('div'); ov.id='medBookOverlay'; ov.className='mbook'; document.body.appendChild(ov); }
+  ov.style.display='block';
+  ov.innerHTML='<div class="mbook-inner"><div class="mbook-head"><b>📖 Medicine Book</b> <span class="mbook-sub">loading…</span><button class="mbook-x" onclick="closeMedBook()">✕</button></div><div class="mbook-body"><p class="muted-sm" style="padding:16px">Loading every treatment across all crops and farms…</p></div></div>';
+  try{ _medBookRows=await fetchMedBookRows(); }
+  catch(e){ const b=ov.querySelector('.mbook-body'); if(b) b.innerHTML='<p style="padding:16px;color:#c0392b">Could not load — check you are signed in and online.<br><small>'+escapeHtml(((e&&e.message)||'')+'')+'</small></p>'; return; }
+  renderMedBook();
+}
+function closeMedBook(){ const ov=document.getElementById('medBookOverlay'); if(ov) ov.style.display='none'; }
+async function fetchMedBookRows(){
+  const sb=window.sb; if(!sb) throw new Error('Not signed in');
+  const {data:farms,error:fe}=await sb.from('farms').select('id,name').eq('deleted',false); if(fe) throw fe;
+  const fname={}; (farms||[]).forEach(f=>fname[f.id]=f.name||f.id);
+  const fids=(farms||[]).map(f=>f.id); if(!fids.length) return [];
+  const {data:houses,error:he}=await sb.from('houses').select('id,name,farm_id').in('farm_id',fids).eq('deleted',false); if(he) throw he;
+  const hById={}; (houses||[]).forEach(h=>hById[h.id]=h);
+  const hids=(houses||[]).map(h=>h.id); if(!hids.length) return [];
+  const {data:pls,error:pe}=await sb.from('placements').select('id,house_id,cycle,placed_date').in('house_id',hids).eq('deleted',false); if(pe) throw pe;
+  const pById={}; (pls||[]).forEach(p=>pById[p.id]=p);
+  const pids=(pls||[]).map(p=>p.id); if(!pids.length) return [];
+  const {data:meds,error:me}=await sb.from('meds').select('*').in('placement_id',pids).eq('deleted',false); if(me) throw me;
+  const rows=(meds||[]).map(m=>{ const p=pById[m.placement_id]||{}; const h=hById[p.house_id]||{}; const farm=fname[h.farm_id]||h.farm_id||'';
+    return { farm, crop:p.cycle||'', house:h.name||'', type:m.med_type||'', product:m.product||'',
+      started:m.start_date||'', starttime:m.start_time||'', finished:m.end_date||'', endtime:m.end_time||'',
+      wdh:(m.withdrawal_hours!=null?m.withdrawal_hours:(m.withdrawal_days!=null?m.withdrawal_days*24:'')),
+      ss:safeSlaughterText((m.withdrawal_hours!=null?m.withdrawal_hours:(m.withdrawal_days!=null?m.withdrawal_days*24:'')),m.safe_slaughter_date,m.safe_slaughter_time),
+      batch:batchCell(m), batches:asBatchArr(m.batches), vetpractice:m.vet_practice||'', vet:m.vet||'', rx:m.rx_ref||'',
+      purchdate:m.purchase_date||'', expiry:m.expiry||'', packsize:m.pack_size||'', species:m.species||'',
+      num:(m.birds_treated!=null?m.birds_treated:''), identity:(m.houses_treated||''), qty:m.qty_used||'',
+      dose:m.dose||'', route:m.route||'', reason:m.reason||'', disposal:m.disposal_method||'',
+      totalmg:(m.total_mg!=null?m.total_mg:''), mgpcu:(m.mg_pcu!=null?m.mg_pcu:''), admin:m.administered_by||'' }; });
+  rows.sort((a,b)=>((a.started||'')<(b.started||''))?1:-1);
+  return rows;
+}
+function renderMedBook(){
+  const ov=document.getElementById('medBookOverlay'); if(!ov) return; const rows=_medBookRows;
+  const farmsList=[...new Set(rows.map(r=>r.farm).filter(Boolean))].sort();
+  const typesList=[...new Set(rows.map(r=>r.type).filter(Boolean))].sort();
+  ov.innerHTML='<div class="mbook-inner">'+
+    '<div class="mbook-head"><b>📖 Medicine Book</b> <span class="mbook-sub">'+rows.length+' treatment'+(rows.length===1?'':'s')+' — all crops &amp; farms</span><button class="mbook-x" onclick="closeMedBook()">✕</button></div>'+
+    '<div class="mbook-filters no-print">Farm <select id="mb_farm" onchange="renderMedBookTable()"><option value="">All</option>'+farmsList.map(f=>'<option>'+escapeHtml(f)+'</option>').join('')+'</select> '+
+      'Type <select id="mb_type" onchange="renderMedBookTable()"><option value="">All</option>'+typesList.map(t=>'<option>'+escapeHtml(t)+'</option>').join('')+'</select> '+
+      '<input id="mb_search" oninput="renderMedBookTable()" placeholder="search crop / house / product / date"> '+
+      '<button class="btn sec" onclick="medBookCSV()">⬇️ CSV</button> <button class="btn sec" onclick="window.print()">🖨️ Print</button></div>'+
+    '<div class="mbook-body" id="mb_body"></div></div>';
+  renderMedBookTable();
+}
+function filteredMedBook(){
+  const fq=(document.getElementById('mb_farm')||{}).value||''; const tq=(document.getElementById('mb_type')||{}).value||'';
+  const sq=(((document.getElementById('mb_search')||{}).value)||'').toLowerCase().trim();
+  return _medBookRows.filter(r=>{ if(fq&&r.farm!==fq)return false; if(tq&&r.type!==tq)return false;
+    if(sq){ const hay=(r.crop+' '+r.house+' '+r.product+' '+r.started+' '+r.finished+' '+r.batch+' '+r.reason).toLowerCase(); if(hay.indexOf(sq)<0)return false; } return true; });
+}
+var MB_COLS=[['Farm','farm'],['Crop','crop'],['Type','type'],['Product','product'],
+  ['Supplying vet','vetpractice'],['Purchased','purchdate'],['Batch','batch'],['Expiry','expiry'],
+  ['Pack size &amp; qty','packsize'],['Species','species'],['Identity','identity'],['No. treated','num'],
+  ['Reason','reason'],['Qty used','qty'],['Dose','dose'],['Route','route'],
+  ['Started','started_t'],['Finished','finished_t'],['W/d (h)','wdh'],['Safe slaughter','ss'],
+  ['Disposal','disposal'],['Administrator','admin'],['Prescribing vet','vet'],['Rx','rx'],
+  ['Total mg','totalmg'],['mg/PCU','mgpcu']];
+function mbCell(r,k){ return k==='started_t'?(r.started+(r.starttime?' '+r.starttime:'')) : k==='finished_t'?(r.finished+(r.endtime?' '+r.endtime:'')) : r[k]; }
+function renderMedBookTable(){
+  const body=document.getElementById('mb_body'); if(!body) return; const rows=filteredMedBook(); _medBookView=rows; const esc=escapeHtml;
+  if(!rows.length){ body.innerHTML='<p class="muted-sm" style="padding:16px">No treatments match.</p>'; return; }
+  body.innerHTML='<p class="muted-sm no-print" style="margin:2px 0 8px">Tap a row to open its full record sheet (to print &amp; file behind the log).</p>'+
+    '<table class="mbook-table"><thead><tr>'+MB_COLS.map(c=>'<th>'+c[0]+'</th>').join('')+'</tr></thead><tbody>'+
+    rows.map((r,i)=>'<tr onclick="openMedSheet('+i+')">'+MB_COLS.map(c=>{ const v=mbCell(r,c[1]); return '<td>'+esc(String(v==null?'':v))+'</td>'; }).join('')+'</tr>').join('')+'</tbody></table>';
+}
+function openMedSheet(i){ const r=_medBookView[i]; const body=document.getElementById('mb_body'); if(!r||!body) return; const esc=escapeHtml;
+  const F=[['Farm',r.farm],['Crop',r.crop],['Type',r.type],['Product',r.product],
+    ['Supplying veterinary practice',r.vetpractice],['Date of purchase',r.purchdate],
+    ['Species treated',r.species],['Identity of animals treated',r.identity],['Number of animals treated',r.num],
+    ['Reason for treatment',r.reason],['Quantity used (total)',r.qty],['Dosage rate',r.dose],['Mode of administration',r.route],
+    ['Treatment started',r.started+(r.starttime?' '+r.starttime:'')],['Treatment finished',r.finished+(r.endtime?' '+r.endtime:'')],
+    ['Withdrawal period (hours)',r.wdh],['Safe to slaughter',r.ss],['Method of disposal of containers',r.disposal],
+    ['Name of administrator',r.admin],['Prescribing vet',r.vet],['Prescription reference',r.rx]];
+  if(r.type==='Antibiotic'){ F.push(['Total antibiotic used (mg)',r.totalmg],['mg per PCU',r.mgpcu]); }
+  const bs=r.batches||[]; let bhtml='';
+  if(bs.length){ bhtml='<div style="margin-top:14px;font-weight:600;font-size:13px">Batches supplied</div>'+
+    '<table class="medsheet-t"><tr><td class="k">Batch number</td><td class="k">Pack size</td><td class="k">Qty supplied</td><td class="k">Expiry</td><td class="k">Qty used</td></tr>'+
+    bs.map(b=>'<tr><td class="v">'+esc(b.batch||'—')+'</td><td>'+esc(b.packsize||'—')+'</td><td>'+esc(b.qty||'—')+'</td><td>'+esc(b.expiry||'—')+'</td><td>'+esc(b.used||'—')+'</td></tr>').join('')+'</table>'; }
+  body.innerHTML='<div class="no-print" style="margin:4px 0 12px"><button class="btn sec" onclick="renderMedBookTable()">← back to list</button> <button class="btn sec" onclick="window.print()">🖨️ Print this sheet</button></div>'+
+    '<div class="medsheet"><h3>Veterinary medicine record</h3>'+
+    '<div class="medsheet-sub">'+esc(r.product||'—')+' · '+esc(r.farm||'')+' · crop '+esc(r.crop||'')+'</div>'+
+    '<table class="medsheet-t">'+F.map(f=>'<tr><td class="k">'+esc(f[0])+'</td><td class="v">'+esc(String(f[1]==null||f[1]===''?'—':f[1]))+'</td></tr>').join('')+'</table>'+bhtml+
+    '<div style="font-size:11px;color:#777;margin-top:10px">© 2026 Rhydimoor Farms Ltd · Veterinary Medicines Record Book</div></div>';
+}
+function medBookCSV(){
+  const rows=filteredMedBook();
+  const head=['Farm','Crop','Type','Product','Supplying vet practice','Date of purchase','Species','Identity of animals treated','Number treated','Reason','Quantity used (total)','Dosage rate','Mode of admin','Date started','Time started','Date finished','Time finished','Withdrawal hours','Safe slaughter','Method of disposal','Administrator','Prescribing vet','Rx ref','Total mg','mg per PCU','Batches (all)'];
+  const lines=[head.join(',')];
+  rows.forEach(r=>lines.push([r.farm,r.crop,r.type,r.product,r.vetpractice,r.purchdate,r.species,r.identity,r.num,r.reason,r.qty,r.dose,r.route,r.started,r.starttime,r.finished,r.endtime,r.wdh,r.ss,r.disposal,r.admin,r.vet,r.rx,r.totalmg,r.mgpcu,batchesToText(r.batches)].map(csvEsc).join(',')));
+  download('medicine-book-'+today()+'.csv',lines.join('\n'),'text/csv'); toast('✓ Medicine book downloaded');
+}
 
 /* ---------------- Records ---------------- */
 function renderRecords(){
@@ -1138,8 +1334,9 @@ function exportWalksCSV(){ const h=curHouse(); if(!h){toast('Add a house first')
 
 function exportMedsCSV(){ const h=curHouse(); if(!h){toast('Add a house first');return;} const ms=medList();
   if(!ms.length){toast('No medicines logged yet');return;}
-  const lines=['Type,Product,Batch,Expiry,Date started,Date ended,Dose,Route,Withdrawal days,Earliest slaughter,Birds/houses,Administered by,Vet,Rx ref,Reason'];
-  ms.forEach(m=>{ const clear=(m.end&&m.wd!=null)?addDays(m.end,m.wd):''; lines.push([m.type,m.product,m.batch,m.expiry,m.start,m.end,m.dose,m.route,m.wd,clear,m.birds,m.admin,m.vet,m.rx,m.reason].map(csvEsc).join(',')); });
+  const lines=['Type,Product,Supplying vet practice,Date of purchase,Batch (primary),Product expiry,Pack size & qty,Species,Identity (house/site),Number treated,Reason,Quantity used (total),Dosage rate,Mode of admin,Date started,Time started,Date finished,Time finished,Withdrawal hours,Safe slaughter,Method of disposal,Administrator,Prescribing vet,Rx ref,Total mg,mg per PCU,Batches (all)'];
+  ms.forEach(m=>{ const ss=(m.ssdate)?{date:m.ssdate,time:m.sstime||''}:((m.end&&m.wdh!=null)?safeSlaughter(m.end,m.endtime,m.wdh):null);
+    lines.push([m.type,m.product,m.vetpractice,m.purchdate,m.batch,m.expiry,m.packsize,m.species,m.birds,m.numtreated,m.reason,m.qtyused,m.dose,m.route,m.start,m.starttime,m.end,m.endtime,(m.wdh!=null?m.wdh:''),safeSlaughterText(m.wdh,(ss?ss.date:''),(ss?ss.time:'')),m.disposal,m.admin,m.vet,m.rx,(m.totalmg!=null?m.totalmg:''),(m.mgpcu!=null?m.mgpcu:''),batchesToText(m.medbatches)].map(csvEsc).join(',')); });
   download(fname('medicines')+'.csv',lines.join('\n'),'text/csv'); toast('✓ Medicines log downloaded'); }
 
 function backupJSON(){ download('broiler-chart-backup-'+today()+'.json',JSON.stringify(DB,null,2),'application/json'); toast('✓ Backup downloaded'); }
@@ -1385,7 +1582,12 @@ function init(){ load();
     for(const m of medRows){ const hid=houseOfPlacement[m.placement_id]; if(!newDB.meds[hid]) continue;
       newDB.meds[hid].push({ id:m.id, type:m.med_type||'', product:m.product||'', batch:m.batch||'',
         expiry:m.expiry||'', start:m.start_date||'', end:m.end_date||'', dose:m.dose||'', route:m.route||'',
-        wd:cnum(m.withdrawal_days), birds:(m.birds_treated!=null?String(m.birds_treated):(m.houses_treated||'')),
+        wd:cnum(m.withdrawal_days), wdh:cnum(m.withdrawal_hours),
+        vetpractice:m.vet_practice||'', purchdate:m.purchase_date||'', packsize:m.pack_size||'', species:m.species||'',
+        numtreated:cnum(m.birds_treated), birds:(m.houses_treated!=null?m.houses_treated:(m.birds_treated!=null?String(m.birds_treated):'')),
+        qtyused:m.qty_used||'', starttime:m.start_time||'', endtime:m.end_time||'', disposal:m.disposal_method||'',
+        ssdate:m.safe_slaughter_date||'', sstime:m.safe_slaughter_time||'',
+        totalmg:cnum(m.total_mg), mgpcu:cnum(m.mg_pcu), medbatches:asBatchArr(m.batches),
         admin:m.administered_by||'', vet:m.vet||'', rx:m.rx_ref||'', reason:m.reason||'' }); }
 
     if(typeof recomputeWaterArr==='function'){
@@ -1487,10 +1689,16 @@ function init(){ load();
         out['walks:'+w.id]={table:'walks', row:{ id:w.id, placement_id:pid, walk_date:w.date, walk_time:w.time||null, op:w.op||null,
           dead:nOrNull(w.dead)||0, leg:nOrNull(w.leg)||0, small:nOrNull(w.small)||0, disease:nOrNull(w.disease)||0,
           other:nOrNull(w.other)||0, bales:nOrNull(w.bales), note:w.note||null, deleted:false }}; });
-      (DB.meds[h.id]||[]).forEach(m=>{ const bt=(m.birds!==''&&m.birds!=null&&!isNaN(Number(m.birds)))?Number(m.birds):null;
+      (DB.meds[h.id]||[]).forEach(m=>{ const bt=nOrNull(m.numtreated);
+        const ss=(m.ssdate)?{date:m.ssdate,time:m.sstime||null}:safeSlaughter(m.end,m.endtime,m.wdh);
         out['meds:'+m.id]={table:'meds', row:{ id:m.id, placement_id:pid, med_type:m.type||null, product:m.product||null, batch:m.batch||null,
           expiry:dOrNull(m.expiry), start_date:dOrNull(m.start), end_date:dOrNull(m.end), dose:m.dose||null, route:m.route||null,
-          withdrawal_days:nOrNull(m.wd), birds_treated:bt, houses_treated:(bt===null?(m.birds||null):null),
+          withdrawal_days:nOrNull(m.wd), withdrawal_hours:nOrNull(m.wdh),
+          vet_practice:m.vetpractice||null, purchase_date:dOrNull(m.purchdate), pack_size:m.packsize||null, species:m.species||null,
+          qty_used:m.qtyused||null, start_time:m.starttime||null, end_time:m.endtime||null, disposal_method:m.disposal||null,
+          safe_slaughter_date:dOrNull(ss?ss.date:null), safe_slaughter_time:(ss?ss.time:null),
+          total_mg:nOrNull(m.totalmg), mg_pcu:nOrNull(m.mgpcu), batches:((m.medbatches&&m.medbatches.length)?m.medbatches:null),
+          birds_treated:bt, houses_treated:(m.birds||null),
           administered_by:m.admin||null, vet:m.vet||null, rx_ref:m.rx||null, reason:m.reason||null, deleted:false }}; });
     });
     return out;
