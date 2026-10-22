@@ -402,6 +402,13 @@
           <div class="fld"><label>Date of purchase</label><input type="date" id="m_purchdate"></div>
         </div>
         <div class="fld"><label>Species to be treated</label><input type="text" id="m_species" placeholder="Broilers"></div>
+        <div class="fld" id="medScopeWrap"><label>Given to</label>
+          <select class="fldsel" id="m_scope" onchange="medScopeSync()">
+            <option value="site">Whole site (every house)</option>
+            <option value="chosen">Chosen houses</option>
+          </select>
+          <div id="medScopeHouses" style="display:none;margin-top:6px"></div>
+          <div class="muted-sm" id="medScopeNote" style="margin-top:4px"></div></div>
         <div class="fld" style="margin-bottom:4px"><label>Batches supplied — add a line for each batch (number · pack size · quantity · expiry · quantity used)</label></div>
         <div id="medBatchList"></div>
         <button class="btn ghost" type="button" onclick="addMedBatch()" style="margin-bottom:6px">➕ Add batch line</button>
@@ -603,6 +610,7 @@
         <div class="fld"><label>Number of enrichment bales (start of crop)</label><input type="number" inputmode="numeric" id="h_enrichbales" placeholder="e.g. 60 (≈ 1.5 / 1000 birds)"></div>
 
         <div class="btnrow"><button class="btn primary" onclick="saveHouse()">Save house</button><button class="btn sec" onclick="cancelHouse()">Cancel</button></div>
+        <button class="btn ghost" id="houseNewCropBtn" style="display:none;margin-top:10px" onclick="startNewCrop()">🐣 Start a new crop in this house</button>
         <button class="btn danger" id="houseDelBtn" style="display:none;margin-top:10px" onclick="deleteHouse()">Delete this house &amp; its records</button>
       </div>
       <div class="help"><b>Put it on your home screen:</b> open this file in Safari (iPhone) or Chrome (Android), tap <b>Share → Add to Home Screen</b>. It then opens like an app and works in the shed with no signal.</div>
@@ -932,13 +940,26 @@ function asBatchArr(v){ if(Array.isArray(v)) return v; if(typeof v==='string'&&v
 function batchesToText(bs){ bs=asBatchArr(bs); if(!bs||!bs.length) return '';
   return bs.map(b=>[b.batch,(b.packsize?('pack '+b.packsize):''),(b.qty?('qty '+b.qty):''),(b.expiry?('exp '+b.expiry):''),(b.used?('used '+b.used):'')].filter(Boolean).join(' · ')).join('  ;  '); }
 function batchCell(m){ const bs=asBatchArr(m.batches); const first=(m.batch||(bs[0]&&bs[0].batch)||''); return first+(bs.length>1?(' (+'+(bs.length-1)+')'):''); }
+/* Who a treatment is given to. A vaccine goes on the whole site the same day; an antibiotic can be the
+   whole site or one or more houses. One record is written per house treated, so each house's chart,
+   withdrawal and the Medicine Book stay right. Bird numbers and total mg are shared out pro rata by
+   birds placed, so totals across the houses add back up to what was entered (antibiotic usage stays true). */
+function medScopeSync(){ const sc=val('m_scope'); const box=document.getElementById('medScopeHouses'); const note=document.getElementById('medScopeNote');
+  if(box) box.style.display=sc==='chosen'?'block':'none';
+  const ids=medScopeIds(); if(note) note.textContent=ids.length?('One record for each of: '+ids.map(i=>(houseById(i)||{}).name).join(', ')):'Tick at least one house'; }
+function renderMedScope(){ const box=document.getElementById('medScopeHouses'); if(!box) return;
+  box.innerHTML=DB.houses.map(h=>`<label class="chk${h.id===DB.current?' on':''}" style="margin:3px 0"><input type="checkbox" class="mscopeH" value="${h.id}"${h.id===DB.current?' checked':''} onchange="this.parentNode.classList.toggle('on',this.checked);medScopeSync()"> ${escapeHtml(h.name)}</label>`).join(''); }
+function medScopeIds(){ if(val('m_scope')==='site') return DB.houses.map(h=>h.id);
+  return [...document.querySelectorAll('#medScopeHouses .mscopeH')].filter(c=>c.checked).map(c=>c.value); }
 function newMed(){ editingMed=null; document.getElementById('medFormTitle').textContent='New entry';
+  document.getElementById('medScopeWrap').style.display=DB.houses.length>1?'block':'none'; setv('m_scope','site'); renderMedScope(); medScopeSync();
   ['m_product','m_vetpractice','m_purchdate','m_birds','m_numtreated','m_reason','m_qtyused','m_dose','m_starttime','m_endtime','m_disposal','m_admin','m_vet','m_rx','m_totalmg','m_mgpcu'].forEach(i=>setv(i,''));
   setv('m_type','Vaccine'); setv('m_species','Broilers'); setv('m_start',today()); setv('m_end',today()); setv('m_wd','');
   MEDBATCHES=[{batch:'',packsize:'',qty:'',expiry:'',used:''}]; renderMedBatchRows();
   document.getElementById('medDelBtn').style.display='none'; medFormSync(); medCalc();
   document.getElementById('medFormCard').style.display='block'; document.getElementById('medFormCard').scrollIntoView({behavior:'smooth'}); }
 function editMed(id){ const m=(DB.meds[DB.current]||[]).find(x=>x.id===id); if(!m)return; editingMed=id;
+  document.getElementById('medScopeWrap').style.display='none';   /* an existing record belongs to one house */
   document.getElementById('medFormTitle').textContent=m.product||'Entry';
   setv('m_type',m.type);setv('m_product',m.product);setv('m_vetpractice',m.vetpractice);setv('m_purchdate',m.purchdate);
   setv('m_species',m.species||'Broilers');
@@ -964,7 +985,25 @@ function saveMed(){ const product=val('m_product').trim(); if(!product){toast('E
     ssdate:ss?ss.date:null,sstime:ss?ss.time:null};
   if(!DB.meds[DB.current])DB.meds[DB.current]=[];
   if(editingMed){ if(!requireAdmin('Only admin can change an existing treatment record'))return; const m=DB.meds[DB.current].find(x=>x.id===editingMed); Object.assign(m,data); logAction('edit med',product); }
-  else { DB.meds[DB.current].push(Object.assign({id:uid('m')},data)); logAction('add med',product); }
+  else {
+    const ids=DB.houses.length>1?medScopeIds():[DB.current];
+    if(!ids.length){ toast('Tick at least one house'); return; }
+    if(ids.length>1){
+      const names=ids.map(i=>(houseById(i)||{}).name||'');
+      const whole=ids.length===DB.houses.length;
+      if(!data.birds) data.birds=whole?('Whole site ('+names.join(', ')+')'):names.join(', ');
+      const placed=ids.map(i=>Number((houseById(i)||{}).birds)||0); const tot=placed.reduce((a,b)=>a+b,0);
+      const share=(v,k)=>(v==null||!tot)?v:Math.round(v*placed[k]/tot*100)/100;
+      const grp=uid('g');
+      ids.forEach((hid,k)=>{ if(!DB.meds[hid])DB.meds[hid]=[];
+        const rec=Object.assign({id:uid('m')},data,{numtreated:data.numtreated==null?null:Math.round(share(data.numtreated,k)),totalmg:share(data.totalmg,k)});
+        DB.meds[hid].push(rec); });
+      logAction('add med',product+' · '+ids.length+' houses ('+grp+')');
+    } else {
+      if(!DB.meds[ids[0]])DB.meds[ids[0]]=[];
+      DB.meds[ids[0]].push(Object.assign({id:uid('m')},data)); logAction('add med',product);
+    }
+  }
   save(); document.getElementById('medFormCard').style.display='none'; renderMeds(); toast('✓ Saved'); }
 function deleteMed(){ if(!requireAdmin('Only admin can delete a treatment record'))return; if(!editingMed)return; if(!confirm('Delete this treatment record?'))return;
   DB.meds[DB.current]=(DB.meds[DB.current]||[]).filter(x=>x.id!==editingMed); save();
@@ -1271,14 +1310,17 @@ function batchSumCalc(){ readBatchRows(); const box=document.getElementById('bat
   const tot=BATCHES.reduce((s,b)=>s+(b.birds||0),0); const bx=BATCHES.reduce((s,b)=>s+(b.boxes||0),0);
   box.style.display='block'; box.innerHTML=`<div class="row big"><span>Total from flock lines → Birds placed</span><b>${fmt(tot)}</b></div>${bx?`<div class="row"><span>Total boxes</span><b>${fmt(bx)}</b></div>`:''}`;
   if(tot>0){ setv('h_birds',tot); houseDensity(); } }
-function newHouse(){ if(!requireAdmin('Only admin can set up houses'))return; editingHouse=null; document.getElementById('houseFormTitle').textContent='New house';
+let newCropFor=null;   // set when the house form is open to START A NEW CROP in an existing house
+function newHouse(){ if(!requireAdmin('Only admin can set up houses'))return; editingHouse=null; newCropFor=null; document.getElementById('houseFormTitle').textContent='New house';
+  document.getElementById('houseNewCropBtn').style.display='none';
   HOUSE_FIELDS.forEach(k=>setv('h_'+k,'')); setv('h_placed',today()); setv('h_littertype','Shavings'); setv('h_watermode','meter');
   BATCHES=[]; renderBatchRows();
   HOUSE_CHECKS.forEach(k=>{const el=document.getElementById('h_'+k); if(el)el.checked=false;});
   document.querySelectorAll('#houseFormCard .chk').forEach(l=>l.classList.remove('on')); houseDensity();
   document.getElementById('houseDelBtn').style.display='none'; document.getElementById('houseFormCard').style.display='block';
   document.getElementById('houseFormCard').scrollIntoView({behavior:'smooth'}); }
-function editHouse(id){ if(!requireAdmin('Only admin can edit house setup'))return; const h=DB.houses.find(x=>x.id===id); if(!h)return; editingHouse=id;
+function editHouse(id){ if(!requireAdmin('Only admin can edit house setup'))return; const h=DB.houses.find(x=>x.id===id); if(!h)return; editingHouse=id; newCropFor=null;
+  document.getElementById('houseNewCropBtn').style.display='block';
   document.getElementById('houseFormTitle').textContent=h.name;
   HOUSE_FIELDS.forEach(k=>setv('h_'+k,h[k]));
   BATCHES=(h.batches||[]).map(b=>Object.assign({},b)); renderBatchRows();
@@ -1286,7 +1328,25 @@ function editHouse(id){ if(!requireAdmin('Only admin can edit house setup'))retu
   document.querySelectorAll('#houseFormCard .chk').forEach(l=>l.classList.toggle('on',l.querySelector('input').checked)); houseDensity();
   document.getElementById('houseDelBtn').style.display='block'; document.getElementById('houseFormCard').style.display='block';
   document.getElementById('houseFormCard').scrollIntoView({behavior:'smooth'}); }
-function cancelHouse(){ document.getElementById('houseFormCard').style.display='none'; }
+function cancelHouse(){ newCropFor=null; document.getElementById('houseFormCard').style.display='none'; }
+function houseHasFinalClearance(id){ return (DB.days[id]||[]).some(d=>d.thin && /clear/i.test(d.thintype||'')); }
+/* Start a new crop in an existing house. Closing the old crop on this device and opening a fresh,
+   empty one, under its own placement in the cloud. The old crop's records stay in the cloud untouched. */
+async function startNewCrop(){ if(!requireAdmin('Only admin can start a new crop'))return; const h=houseById(editingHouse); if(!h)return;
+  if(!houseHasFinalClearance(h.id)){
+    if(!confirm(h.name+' has no Final clearance entered for crop '+(h.cycle||'?')+'.\n\nThe end of crop records for that crop are only built once every house has its Final clearance. Start a new crop anyway?')) return; }
+  if(typeof window.cloudPendingCount==='function'){
+    if(window.cloudPendingCount()>0 && typeof window.cloudFlushNow==='function'){ try{ await window.cloudFlushNow(); }catch(e){} }
+    if(window.cloudPendingCount()>0){ alert('Some entries on this device have not reached the cloud yet.\n\nGet a signal, press Sync, and try again. Starting a new crop now could lose them.'); return; } }
+  newCropFor=h.id;
+  document.getElementById('houseFormTitle').textContent='New crop · '+h.name;
+  ['cycle','placeno','birds','tweight','tday','startmeter','ph2','ph1','ph0','lux','enrichbales','dnno','dndate','dnhatch','dnvacc','dntimes'].forEach(k=>setv('h_'+k,''));
+  setv('h_placed',today());
+  BATCHES=[]; renderBatchRows();
+  HOUSE_CHECKS.forEach(k=>{const el=document.getElementById('h_'+k); if(el)el.checked=false;});
+  document.querySelectorAll('#houseFormCard .chk').forEach(l=>l.classList.remove('on')); houseDensity();
+  document.getElementById('houseNewCropBtn').style.display='none'; document.getElementById('houseDelBtn').style.display='none';
+  toast('Enter the new crop number, date placed and birds, then Save'); }
 function saveHouse(){ if(!requireAdmin('Only admin can save house setup'))return; const name=val('h_name').trim(); if(!name){toast('Give the house a name');return;}
   const ck=id=>{const el=document.getElementById(id);return el?el.checked:false;};
   const data={name,placed:val('h_placed'),birds:num('h_birds'),breed:val('h_breed'),area:num('h_area'),tweight:num('h_tweight'),tday:num('h_tday'),
@@ -1298,7 +1358,23 @@ function saveHouse(){ if(!requireAdmin('Only admin can save house setup'))return
   const btot=bts.reduce((s,b)=>s+(b.birds||0),0);
   if(bts.length){ const fc=bts.map(b=>b.flock).filter(Boolean).join(' + '); if(fc)data.flockcode=fc; const a0=bts.find(b=>b.age!=null); if(a0)data.flockage=a0.age; }
   if(btot>0){ data.birds=btot; }
-  if(editingHouse){ Object.assign(DB.houses.find(x=>x.id===editingHouse),data); }
+  if(newCropFor){ const h=houseById(newCropFor); if(!h){ newCropFor=null; return; }
+    const cyc=(data.cycle||'').trim();
+    if(!cyc){ toast('Enter the new crop number'); return; }
+    if(cyc===(h.cycle||'')){ toast('That is the current crop number. Enter the NEW crop number'); return; }
+    if(!data.placed){ toast('Enter the date placed'); return; }
+    if(!confirm('Start crop '+cyc+' in '+h.name+', placed '+data.placed+'?\n\nCrop '+(h.cycle||'?')+' closes on this device. Its records stay safe in the cloud.\n\nOnly do this once the end of crop records for crop '+(h.cycle||'?')+' have been built. Everyone else reloads the app afterwards.')) return;
+    if(typeof window.cloudStartPlacement!=='function'){ alert('Not connected to the cloud. Sign in and try again.'); return; }
+    window.cloudStartPlacement(h, data).then(pid=>{
+      Object.assign(h,data); h._placementId=pid;
+      DB.days[h.id]=[]; DB.walks[h.id]=[]; DB.meds[h.id]=[];   // the old crop's records belong to the closed placement, already in the cloud
+      logAction('start new crop',h.name+' · '+cyc); newCropFor=null;
+      save(); document.getElementById('houseFormCard').style.display='none'; renderHouses(); renderHeader(); loadEntryForDate(today()); toast('✓ Crop '+cyc+' started in '+h.name);
+    }).catch(e=>{ alert('The new crop could not be started, nothing has changed.\n\n'+((e&&(e.message||e.code))||e)); });
+    return; }
+  if(editingHouse){ const cur=DB.houses.find(x=>x.id===editingHouse);
+    if((data.cycle||'')!==(cur.cycle||'') && (cur.cycle||'')){ toast('To change crop use 🐣 Start a new crop'); setv('h_cycle',cur.cycle); return; }
+    Object.assign(cur,data); }
   else { const id=uid('h'); DB.houses.push(Object.assign({id},data)); if(!DB.current)DB.current=id; DB.days[id]=DB.days[id]||[]; DB.walks[id]=DB.walks[id]||[]; DB.meds[id]=DB.meds[id]||[]; }
   logAction('save house',name); save(); document.getElementById('houseFormCard').style.display='none'; renderHouses(); renderHeader(); loadEntryForDate(today()); toast('✓ House saved'); }
 function deleteHouse(){ if(!requireAdmin('Only admin can delete a house'))return; if(!editingHouse)return; const h=DB.houses.find(x=>x.id===editingHouse);
@@ -1760,6 +1836,21 @@ function init(){ load();
       }
     } finally { _flushing=false; }
   }
+  // ---- New crop support (22 Oct 2026). Insert the new placement straight away and wait for the
+  // answer, so a refusal shows on screen instead of being dropped quietly from the queue.
+  window.cloudPendingCount=function(){ return loadQ().length; };
+  window.cloudFlushNow=function(){ return flushQueue(); };
+  window.cloudStartPlacement=async function(h,data){
+    if(!sb) throw new Error('not signed in');
+    if(typeof navigator!=='undefined' && navigator.onLine===false) throw new Error('no signal');
+    const pid='p-'+h.id+'-'+String(data.cycle).trim();
+    const row={ id:pid, house_id:h.id, cycle:String(data.cycle).trim(), placed_date:dOrNull(data.placed), birds:nOrNull(data.birds),
+      breed:data.breed||h.breed||null, rt:data.rt||null, littertype:data.littertype||null, watermode:data.watermode||'meter',
+      target_weight:nOrNull(data.tweight), target_day:nOrNull(data.tday), deleted:false };
+    const {data:existing,error:ee}=await sb.from('daily_records').select('id').eq('placement_id',pid).limit(1);
+    if(ee) throw ee; if(existing && existing.length) throw new Error('Crop '+row.cycle+' already has daily records in '+h.name);
+    const {error}=await sb.from('placements').upsert(stampUser(row)); if(error) throw error;
+    return pid; };
   function installPushHooks(){
     if(_hooksInstalled) return; _hooksInstalled=true;
     // One-time recovery: earlier builds could leave a failed push op stuck in the queue (a partial
@@ -1802,7 +1893,7 @@ function init(){ load();
   document.head.appendChild(css);
 
   // Version badge — so anyone can confirm at a glance they're on the latest build.
-  var APP_VERSION='v3 · 17 Jul';
+  var APP_VERSION='v4 · 22 Oct';
   try{ var vtag=document.createElement('div'); vtag.id='verTag'; vtag.textContent=APP_VERSION;
     vtag.style.cssText='position:fixed;left:4px;bottom:4px;z-index:40;font:10px/1 monospace;color:#7d9488;opacity:.7;pointer-events:none';
     (document.body||document.documentElement).appendChild(vtag); }catch(e){}
