@@ -634,7 +634,7 @@
 <div id="printArea"></div>
 
 <script>
-window.APP_VERSION='v5 · 22 Oct';   // bump on every change; header, badge and the update check all read this
+window.APP_VERSION='v6 · 23 Oct';   // bump on every change; header, badge and the update check all read this
   // Update check (v5). When a newer version has been published, show a bar to reload onto it.
   try{ var _updChk=function(){
       fetch(location.pathname.replace(/[^\/]*$/,'')+'index.html?vc='+Date.now(),{cache:'no-store'})
@@ -1331,7 +1331,7 @@ function batchSumCalc(){ readBatchRows(); const box=document.getElementById('bat
 let newCropFor=null;   // set when the house form is open to START A NEW CROP in an existing house
 function newHouse(){ if(!requireAdmin('Only admin can set up houses'))return; editingHouse=null; newCropFor=null; document.getElementById('houseFormTitle').textContent='New house';
   document.getElementById('houseNewCropBtn').style.display='none';
-  HOUSE_FIELDS.forEach(k=>setv('h_'+k,'')); setv('h_placed',today()); setv('h_littertype','Shavings'); setv('h_watermode','meter');
+  HOUSE_FIELDS.forEach(k=>setv('h_'+k,'')); lockCropFields(false); setv('h_placed',today()); setv('h_littertype','Shavings'); setv('h_watermode','meter');
   BATCHES=[]; renderBatchRows();
   HOUSE_CHECKS.forEach(k=>{const el=document.getElementById('h_'+k); if(el)el.checked=false;});
   document.querySelectorAll('#houseFormCard .chk').forEach(l=>l.classList.remove('on')); houseDensity();
@@ -1340,12 +1340,14 @@ function newHouse(){ if(!requireAdmin('Only admin can set up houses'))return; ed
 function editHouse(id){ if(!requireAdmin('Only admin can edit house setup'))return; const h=DB.houses.find(x=>x.id===id); if(!h)return; editingHouse=id; newCropFor=null;
   document.getElementById('houseNewCropBtn').style.display='block';
   document.getElementById('houseFormTitle').textContent=h.name;
-  HOUSE_FIELDS.forEach(k=>setv('h_'+k,h[k]));
+  HOUSE_FIELDS.forEach(k=>setv('h_'+k,h[k])); lockCropFields(true);
   BATCHES=(h.batches||[]).map(b=>Object.assign({},b)); renderBatchRows();
   HOUSE_CHECKS.forEach(k=>{const el=document.getElementById('h_'+k); if(el)el.checked=!!h[k];});
   document.querySelectorAll('#houseFormCard .chk').forEach(l=>l.classList.toggle('on',l.querySelector('input').checked)); houseDensity();
   document.getElementById('houseDelBtn').style.display='block'; document.getElementById('houseFormCard').style.display='block';
   document.getElementById('houseFormCard').scrollIntoView({behavior:'smooth'}); }
+// Crop number and date placed can only be changed through Start a new crop (v6, 23 Oct 2026)
+function lockCropFields(on){ ['h_placed','h_cycle'].forEach(id=>{ const el=document.getElementById(id); if(el){ el.disabled=!!on; el.title=on?'Change this with 🐣 Start a new crop':''; } }); }
 function cancelHouse(){ newCropFor=null; document.getElementById('houseFormCard').style.display='none'; }
 function houseHasFinalClearance(id){ return (DB.days[id]||[]).some(d=>d.thin && /clear/i.test(d.thintype||'')); }
 /* Start a new crop in an existing house. Closing the old crop on this device and opening a fresh,
@@ -1356,7 +1358,7 @@ async function startNewCrop(){ if(!requireAdmin('Only admin can start a new crop
   if(typeof window.cloudPendingCount==='function'){
     if(window.cloudPendingCount()>0 && typeof window.cloudFlushNow==='function'){ try{ await window.cloudFlushNow(); }catch(e){} }
     if(window.cloudPendingCount()>0){ alert('Some entries on this device have not reached the cloud yet.\n\nGet a signal, press Sync, and try again. Starting a new crop now could lose them.'); return; } }
-  newCropFor=h.id;
+  newCropFor=h.id; lockCropFields(false);
   document.getElementById('houseFormTitle').textContent='New crop · '+h.name;
   ['cycle','placeno','birds','tweight','tday','startmeter','ph2','ph1','ph0','lux','enrichbales','dnno','dndate','dnhatch','dnvacc','dntimes'].forEach(k=>setv('h_'+k,''));
   setv('h_placed',today());
@@ -1392,6 +1394,7 @@ function saveHouse(){ if(!requireAdmin('Only admin can save house setup'))return
     return; }
   if(editingHouse){ const cur=DB.houses.find(x=>x.id===editingHouse);
     if((data.cycle||'')!==(cur.cycle||'') && (cur.cycle||'')){ toast('To change crop use 🐣 Start a new crop'); setv('h_cycle',cur.cycle); return; }
+    if((data.placed||'')!==(cur.placed||'') && (cur.placed||'')){ toast('To change the date placed use 🐣 Start a new crop'); setv('h_placed',cur.placed); return; }
     Object.assign(cur,data); }
   else { const id=uid('h'); DB.houses.push(Object.assign({id},data)); if(!DB.current)DB.current=id; DB.days[id]=DB.days[id]||[]; DB.walks[id]=DB.walks[id]||[]; DB.meds[id]=DB.meds[id]||[]; }
   logAction('save house',name); save(); document.getElementById('houseFormCard').style.display='none'; renderHouses(); renderHeader(); loadEntryForDate(today()); toast('✓ House saved'); }
