@@ -529,13 +529,13 @@
         <h2><span class="em">🔒</span> Access &amp; roles</h2>
         <p class="section-note" id="accessState"></p>
         <div id="accessAdmin" style="display:none">
-          <p class="muted-sm" style="margin:0 0 10px">Set an admin PIN so others (e.g. Jack) can record walks and daily readings but can't edit or delete existing records. Without a PIN, everyone has full access.</p>
+          <p class="muted-sm" style="margin:0 0 10px">Set an admin PIN so others (e.g. Jack) can record and correct walks and daily readings, but can't delete records, change house setup or start a new crop. Starting a new crop always asks for the PIN. Without a PIN, everyone has full access.</p>
           <div class="fld"><label>Admin PIN (4+ digits)</label><input type="password" inputmode="numeric" id="a_pin" placeholder="set or change PIN"></div>
           <div class="btnrow"><button class="btn primary" onclick="setPin()">Save PIN</button><button class="btn danger" onclick="clearPin()">Remove PIN</button></div>
           <button class="btn sec" onclick="lockNow()" style="margin-top:10px">🔒 Lock now (switch to operator mode)</button>
         </div>
         <div id="accessOperator" style="display:none">
-          <p class="muted-sm" style="margin:0 0 10px">You're in <b>operator mode</b> — you can add walks and save daily readings, but editing and deleting existing records is locked. Enter the admin PIN to unlock.</p>
+          <p class="muted-sm" style="margin:0 0 10px">You're in <b>operator mode</b>. You can add walks and add or correct daily readings. Deleting records, house setup and starting a new crop are locked. Enter the admin PIN to unlock.</p>
           <div class="fld"><label>Admin PIN</label><input type="password" inputmode="numeric" id="a_unlock" placeholder="enter PIN"></div>
           <button class="btn primary" onclick="unlock()">Unlock admin mode</button>
         </div>
@@ -634,7 +634,7 @@
 <div id="printArea"></div>
 
 <script>
-window.APP_VERSION='v6 · 23 Oct';   // bump on every change; header, badge and the update check all read this
+window.APP_VERSION='v7 · 26 Oct';   // bump on every change; header, badge and the update check all read this
   // Update check (v5). When a newer version has been published, show a bar to reload onto it.
   try{ var _updChk=function(){
       fetch(location.pathname.replace(/[^\/]*$/,'')+'index.html?vc='+Date.now(),{cache:'no-store'})
@@ -852,12 +852,7 @@ function saveEntry(){
   const h=curHouse(); if(!h){toast('Add a house first');return;}
   const date=val('f_date'); if(!date){toast('Pick a date');return;}
   if(!DB.days[DB.current])DB.days[DB.current]=[]; const arr=DB.days[DB.current]; const i=arr.findIndex(x=>x.date===date);
-  if(i>=0 && !isAdmin()){
-    const p=prompt('🔒 This day is already saved. Enter the admin PIN to update it — everything you have typed will be kept:');
-    if(p===null) return;
-    if(p!==DB.auth.pin){ toast('Wrong PIN — not saved'); return; }
-    sessionAdmin=true; updateLockUI(); renderAccess(); renderHeader();
-  }
+  // v7, 26 Oct 2026: correcting a day that is already saved no longer needs the admin PIN.
   const ck=id=>{ const el=document.getElementById(id); return el?el.checked:false; };
   const meter=num('f_meter');
   const e={date,meter,mtime:val('f_mtime'),waterdaily:num('f_waterdaily'),feed:num('f_feed'),wheat:num('f_wheat'),feedtype:val('f_feedtype'),weight:num('f_weight'),
@@ -1353,6 +1348,9 @@ function houseHasFinalClearance(id){ return (DB.days[id]||[]).some(d=>d.thin && 
 /* Start a new crop in an existing house. Closing the old crop on this device and opening a fresh,
    empty one, under its own placement in the cloud. The old crop's records stay in the cloud untouched. */
 async function startNewCrop(){ if(!requireAdmin('Only admin can start a new crop'))return; const h=houseById(editingHouse); if(!h)return;
+  // v7, 26 Oct 2026: starting a crop always asks for the admin PIN, even when the device is already unlocked
+  if(DB.auth.pin){ const p=prompt('🔒 Enter the admin PIN to start a new crop in '+h.name+':'); if(p===null) return;
+    if(p!==DB.auth.pin){ toast('Wrong PIN. New crop not started'); return; } }
   if(!houseHasFinalClearance(h.id)){
     if(!confirm(h.name+' has no Final clearance entered for crop '+(h.cycle||'?')+'.\n\nThe end of crop records for that crop are only built once every house has its Final clearance. Start a new crop anyway?')) return; }
   if(typeof window.cloudPendingCount==='function'){
